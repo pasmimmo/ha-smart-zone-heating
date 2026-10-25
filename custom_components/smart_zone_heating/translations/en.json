@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Step 1: Heater and Number of Zones",
+        "description": "Select the main heater switch (pellet stove, boiler, etc.) and the number of heating zones.",
+        "data": {
+          "system_name": "System name",
+          "heater_entity": "Heater (Stove / Boiler switch)",
+          "zone_count": "Number of zones (zone valves)"
+        }
+      },
+      "zone": {
+        "title": "Configure Zone {zone_num} of {zone_total}",
+        "description": "Set the zone name, zone valve switch, and initial temperature sensor (you can change the sensor anytime from the Device page).",
+        "data": {
+          "zone_name": "Zone name (e.g. First Floor, Day Zone)",
+          "valve_entity": "Zone valve (Switch)",
+          "temp_sensor": "Temperature sensor",
+          "target_temp": "Initial target temperature (°C)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Heater Settings",
+        "data": {
+          "heater_entity": "Heater (Stove / Boiler switch)"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,109 @@
+default_config:
+
+# Entità di simulazione per testare l'integrazione Smart Zone Heating
+input_boolean:
+  sim_stufa_pellet:
+    name: "Simulazione Contatto Stufa"
+    icon: mdi:fire
+  sim_valvola_piano_1:
+    name: "Simulazione Valvola Piano 1"
+    icon: mdi:pipe-valve
+  sim_valvola_piano_2:
+    name: "Simulazione Valvola Piano 2"
+    icon: mdi:pipe-valve
+
+input_number:
+  sim_temp_piano_1:
+    name: "Simulazione Temp Piano 1"
+    min: 10
+    max: 30
+    step: 0.5
+    initial: 18.5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+  sim_temp_piano_2:
+    name: "Simulazione Temp Piano 2"
+    min: 10
+    max: 30
+    step: 0.5
+    initial: 19.0
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+  sim_temp_camera_ospiti:
+    name: "Simulazione Temp Camera Ospiti"
+    min: 10
+    max: 30
+    step: 0.5
+    initial: 17.5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+  sim_consumo_stufa:
+    name: "Simulazione Consumo Stufa (Watt)"
+    min: 0
+    max: 400
+    step: 5
+    initial: 2
+    unit_of_measurement: "W"
+    icon: mdi:flash
+
+template:
+  - switch:
+      - name: "Stufa a Pellet (Dry Run)"
+        unique_id: switch_stufa_pellet_dry_run
+        state: "{{ is_state('input_boolean.sim_stufa_pellet', 'on') }}"
+        turn_on:
+          service: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_stufa_pellet
+        turn_off:
+          service: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_stufa_pellet
+      - name: "Valvola Zona Piano 1"
+        unique_id: switch_valvola_piano_1
+        state: "{{ is_state('input_boolean.sim_valvola_piano_1', 'on') }}"
+        turn_on:
+          service: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_valvola_piano_1
+        turn_off:
+          service: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_valvola_piano_1
+      - name: "Valvola Zona Piano 2"
+        unique_id: switch_valvola_piano_2
+        state: "{{ is_state('input_boolean.sim_valvola_piano_2', 'on') }}"
+        turn_on:
+          service: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_valvola_piano_2
+        turn_off:
+          service: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_valvola_piano_2
+
+  - sensor:
+      - name: "Temperatura Piano 1"
+        unique_id: sensor_temp_piano_1
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: "{{ states('input_number.sim_temp_piano_1') | float(18.5) }}"
+      - name: "Temperatura Piano 2"
+        unique_id: sensor_temp_piano_2
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: "{{ states('input_number.sim_temp_piano_2') | float(19.0) }}"
+      - name: "Temperatura Camera Ospiti"
+        unique_id: sensor_temp_camera_ospiti
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: "{{ states('input_number.sim_temp_camera_ospiti') | float(17.5) }}"
+      - name: "Potenza Stufa"
+        unique_id: sensor_potenza_stufa
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ states('input_number.sim_consumo_stufa') | float(2) }}"

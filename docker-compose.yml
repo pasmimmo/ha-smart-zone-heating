@@ -1,0 +1,12 @@
+services:
+  homeassistant:
+    container_name: ha-smart-zone-test
+    image: ghcr.io/home-assistant/home-assistant:stable
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./ha_test_config:/config
+      - ./custom_components/smart_zone_heating:/config/custom_components/smart_zone_heating
+    environment:
+      - TZ=Europe/Rome
+    restart: unless-stopped

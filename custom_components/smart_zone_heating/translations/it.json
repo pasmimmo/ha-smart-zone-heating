@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Passo 1: Generatore e Numero di Zone",
+        "description": "Seleziona lo switch che pilota il generatore di calore (stufa, caldaia, ecc.) e il numero di zone/piani da controllare.",
+        "data": {
+          "system_name": "Nome dell'impianto",
+          "heater_entity": "Heater (Switch Stufa / Caldaia)",
+          "zone_count": "Numero di zone (valvole di zona)"
+        }
+      },
+      "zone": {
+        "title": "Configurazione Zona {zone_num} di {zone_total}",
+        "description": "Imposta il nome della zona, la valvola associata e il sensore di temperatura iniziale (potrai cambiarlo anche al volo dalla pagina del dispositivo).",
+        "data": {
+          "zone_name": "Nome della zona (es. Primo Piano, Zona Giorno)",
+          "valve_entity": "Valvola di zona (Switch)",
+          "temp_sensor": "Sensore di temperatura",
+          "target_temp": "Temperatura desiderata iniziale (°C)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Impostazioni Generatore",
+        "data": {
+          "heater_entity": "Heater (Switch Stufa / Caldaia)"
+        }
+      }
+    }
+  }
+}
