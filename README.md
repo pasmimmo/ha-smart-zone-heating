@@ -1,4 +1,4 @@
-# 🔥 Smart Zone Heating for Home Assistant
+# <img src="custom_components/smart_zone_heating/brand/icon.png" width="48" height="48" align="absmiddle" alt="Smart Zone Heating Icon" /> Smart Zone Heating for Home Assistant
 
 [![HACS Validation](https://img.shields.io/github/actions/workflow/status/pasmimmo/ha-smart-zone-heating/validate.yml?label=HACS%20%26%20Hassfest)](https://github.com/pasmimmo/ha-smart-zone-heating/actions)
 [![Version](https://img.shields.io/badge/version-0.9.0--pre-orange.svg)](https://github.com/pasmimmo/ha-smart-zone-heating/releases)
@@ -205,3 +205,4 @@ Open `http://localhost:8123` in your browser. The test instance (`ha_test_config
 ## 📄 License
 
 Distributed under the **MIT License**. See [LICENSE](LICENSE) for more information.
+
