@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 540" width="100%" height="100%" font-family="Segoe UI, Inter, system-ui, -apple-system, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="coreGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accentOrange" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+    <linearGradient id="accentBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="accentGreen" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fb923c"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1100" height="540" rx="18" fill="url(#bgGrad)"/>
+  <rect x="1" y="1" width="1098" height="538" rx="17" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <text x="550" y="42" text-anchor="middle" fill="#f8fafc" font-size="21" font-weight="700" letter-spacing="0.5">SMART ZONE HEATING — SYSTEM ARCHITECTURE</text>
+  <text x="550" y="65" text-anchor="middle" fill="#94a3b8" font-size="13">Multi-Zone Thermostat Controller • Watt Cooldown &amp; Timer Fallback • Manual Ignition Safety</text>
+
+  <!-- LEFT COLUMN: INPUTS -->
+  <g filter="url(#shadow)">
+    <rect x="35" y="95" width="265" height="410" rx="14" fill="#1e293b" stroke="#0ea5e9" stroke-width="1.5"/>
+    <rect x="35" y="95" width="265" height="40" rx="14" fill="url(#accentBlue)"/>
+    <text x="167" y="120" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="700">1. SENSORI &amp; INGRESSI</text>
+  </g>
+
+  <!-- Input Card 1 -->
+  <rect x="52" y="155" width="231" height="72" rx="10" fill="#0f172a" stroke="#334155"/>
+  <circle cx="80" cy="191" r="16" fill="#0284c7" fill-opacity="0.25" stroke="#38bdf8"/>
+  <text x="80" y="196" text-anchor="middle" fill="#38bdf8" font-size="15">🌡️</text>
+  <text x="108" y="183" fill="#f1f5f9" font-size="13" font-weight="600">Sensori Temp. Zone 1..N</text>
+  <text x="108" y="201" fill="#94a3b8" font-size="11">Selezionabili al volo da UI</text>
+  <text x="108" y="216" fill="#38bdf8" font-size="10" font-family="Consolas, monospace">sensor.temp_piano_1 / 2</text>
+
+  <!-- Input Card 2 -->
+  <rect x="52" y="242" width="231" height="78" rx="10" fill="#0f172a" stroke="#334155"/>
+  <circle cx="80" cy="281" r="16" fill="#f59e0b" fill-opacity="0.2" stroke="#fbbf24"/>
+  <text x="80" y="286" text-anchor="middle" fill="#fbbf24" font-size="15">⚡</text>
+  <text x="108" y="269" fill="#f1f5f9" font-size="13" font-weight="600">Presa Smart Consumi (W)</text>
+  <text x="108" y="287" fill="#94a3b8" font-size="11">Rileva stufa accesa / in spegnimento</text>
+  <text x="108" y="304" fill="#fbbf24" font-size="10" font-family="Consolas, monospace">Soglia es. &gt;= 10 W</text>
+
+  <!-- Input Card 3 -->
+  <rect x="52" y="335" width="231" height="72" rx="10" fill="#0f172a" stroke="#334155"/>
+  <circle cx="80" cy="371" r="16" fill="#8b5cf6" fill-opacity="0.25" stroke="#a78bfa"/>
+  <text x="80" y="376" text-anchor="middle" fill="#a78bfa" font-size="15">🕒</text>
+  <text x="108" y="363" fill="#f1f5f9" font-size="13" font-weight="600">Fasce Orarie Giorno/Notte</text>
+  <text x="108" y="381" fill="#94a3b8" fill-size="11">Cambio preset automatico</text>
+  <text x="108" y="396" fill="#a78bfa" font-size="10" font-family="Consolas, monospace">07:00 Giorno | 22:00 Notte</text>
+
+  <!-- Input Card 4 -->
+  <rect x="52" y="422" width="231" height="66" rx="10" fill="#0f172a" stroke="#334155"/>
+  <circle cx="80" cy="455" r="16" fill="#ec4899" fill-opacity="0.2" stroke="#f472b6"/>
+  <text x="80" y="460" text-anchor="middle" fill="#f472b6" font-size="15">🏠</text>
+  <text x="108" y="449" fill="#f1f5f9" font-size="13" font-weight="600">Controlli Utente / Away</text>
+  <text x="108" y="467" fill="#94a3b8" font-size="11">Impianto Abilitato • Fuori Casa</text>
+
+  <!-- CENTER COLUMN: COORDINATOR ENGINE -->
+  <g filter="url(#shadow)">
+    <rect x="365" y="95" width="370" height="410" rx="14" fill="url(#coreGrad)" stroke="#f97316" stroke-width="2"/>
+    <rect x="365" y="95" width="370" height="40" rx="14" fill="url(#accentOrange)"/>
+    <text x="550" y="120" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="700">2. SMART ZONE HEATING (DEVICE HA)</text>
+  </g>
+
+  <!-- Core Sub-box 1: Thermostats -->
+  <rect x="385" y="152" width="330" height="82" rx="10" fill="#1e293b" stroke="#475569"/>
+  <text x="402" y="175" fill="#fb923c" font-size="13" font-weight="700">🌡️ Termostati Virtuali di Zona (Climate 1..N)</text>
+  <text x="402" y="195" fill="#e2e8f0" font-size="12">• 3 Preset per zona: Giorno, Notte, Fuori Casa</text>
+  <text x="402" y="213" fill="#94a3b8" font-size="11">• Calcolo richiesta calore con Isteresi configurabile (±0.3°C)</text>
+
+  <!-- Core Sub-box 2: Cooldown Engine -->
+  <rect x="385" y="246" width="330" height="86" rx="10" fill="#1e293b" stroke="#475569"/>
+  <text x="402" y="269" fill="#38bdf8" font-size="13" font-weight="700">♻️ Motore Smaltimento Calore (Post-Circolazione)</text>
+  <text x="402" y="289" fill="#e2e8f0" font-size="12">• Primario: tiene aperta la valvola finché Watt &gt;= Soglia</text>
+  <text x="402" y="307" fill="#94a3b8" font-size="11">• Fallback: se il sensore Watt manca/sparisce usa il Timer (60m)</text>
+
+  <!-- Core Sub-box 3: Safety Override -->
+  <rect x="385" y="344" width="330" height="72" rx="10" fill="#1e293b" stroke="#475569"/>
+  <text x="402" y="367" fill="#facc15" font-size="13" font-weight="700">🛡️ Sicurezza Accensione Manuale (&gt; Soglia W)</text>
+  <text x="402" y="387" fill="#e2e8f0" font-size="12">• Se stufa accesa dal tasto fisico a termostati spenti:</text>
+  <text x="402" y="404" fill="#94a3b8" font-size="11">  apre automaticamente la valvola di sicurezza designata</text>
+
+  <!-- Core Sub-box 4: Watchdog -->
+  <rect x="385" y="428" width="330" height="62" rx="10" fill="#1e293b" stroke="#ef4444" stroke-dasharray="4 2"/>
+  <text x="402" y="450" fill="#f87171" font-size="13" font-weight="700">🚨 Watchdog &amp; Sensore Problema (Fail-Safe)</text>
+  <text x="402" y="470" fill="#cbd5e1" font-size="11">Ferma la zona se il termometro va offline e attiva binary_sensor.problem</text>
+
+  <!-- RIGHT COLUMN: OUTPUTS -->
+  <g filter="url(#shadow)">
+    <rect x="800" y="95" width="265" height="410" rx="14" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+    <rect x="800" y="95" width="265" height="40" rx="14" fill="url(#accentGreen)"/>
+    <text x="932" y="120" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="700">3. ATTUATORI &amp; NOTIFICHE</text>
+  </g>
+
+  <!-- Output Card 1: Zone Valves -->
+  <rect x="817" y="155" width="231" height="95" rx="10" fill="#0f172a" stroke="#334155"/>
+  <circle cx="845" cy="202" r="16" fill="#10b981" fill-opacity="0.2" stroke="#34d399"/>
+  <text x="845" y="207" text-anchor="middle" fill="#34d399" font-size="15">🔧</text>
+  <text x="873" y="182" fill="#f1f5f9" font-size="13" font-weight="600">Switch Valvole Zona 1..N</text>
+  <text x="873" y="200" fill="#94a3b8" font-size="11">Aperte per: Richiesta Calore,</text>
+  <text x="873" y="216" fill="#94a3b8" font-size="11">Smaltimento o Sicurezza &gt;10W</text>
+  <text x="873" y="235" fill="#34d399" font-size="10" font-family="Consolas, monospace">switch.valvola_piano_1 / 2</text>
+
+  <!-- Output Card 2: Heater Switch -->
+  <rect x="817" y="268" width="231" height="90" rx="10" fill="#0f172a" stroke="#334155"/>
+  <circle cx="845" cy="313" r="16" fill="#ef4444" fill-opacity="0.2" stroke="#f87171"/>
+  <text x="845" y="318" text-anchor="middle" fill="#f87171" font-size="15">🔥</text>
+  <text x="873" y="295" fill="#f1f5f9" font-size="13" font-weight="600">Switch Generatore (Heater)</text>
+  <text x="873" y="313" fill="#94a3b8" font-size="11">Contatto pulito Stufa / Caldaia</text>
+  <text x="873" y="329" fill="#94a3b8" font-size="11">ON se almeno 1 zona chiede calore</text>
+  <text x="873" y="346" fill="#f87171" font-size="10" font-family="Consolas, monospace">switch.stufa_pellet</text>
+
+  <!-- Output Card 3: Notifications -->
+  <rect x="817" y="376" width="231" height="110" rx="10" fill="#0f172a" stroke="#334155"/>
+  <circle cx="845" cy="431" r="16" fill="#3b82f6" fill-opacity="0.2" stroke="#60a5fa"/>
+  <text x="845" y="436" text-anchor="middle" fill="#60a5fa" font-size="15">📲</text>
+  <text x="873" y="402" fill="#f1f5f9" font-size="13" font-weight="600">Notifiche Smart (Notify)</text>
+  <text x="873" y="420" fill="#f87171" font-size="11">• Error: Sensori/Switch offline</text>
+  <text x="873" y="437" fill="#fbbf24" font-size="11">• Warning: Accensione manuale /</text>
+  <text x="873" y="452" fill="#fbbf24" font-size="11">  passaggio a timer di fallback</text>
+  <text x="873" y="469" fill="#38bdf8" font-size="11">• Debug: Ogni evento valvole/stufa</text>
+
+  <!-- ARROWS LEFT -> CENTER -->
+  <line x1="300" y1="191" x2="360" y2="191" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <line x1="300" y1="281" x2="360" y2="281" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <line x1="300" y1="371" x2="360" y2="371" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <line x1="300" y1="455" x2="360" y2="455" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- ARROWS CENTER -> RIGHT -->
+  <line x1="735" y1="202" x2="795" y2="202" stroke="#34d399" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+  <line x1="735" y1="313" x2="795" y2="313" stroke="#fb923c" stroke-width="2.5" marker-end="url(#arrowOrange)"/>
+  <line x1="735" y1="431" x2="795" y2="431" stroke="#38bdf8" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+</svg>

@@ -1,11 +1,11 @@
 # 🔥 Smart Zone Heating for Home Assistant
 
-[![HACS Validation](https://img.shields.io/github/actions/workflow/status/pasmi/ha-smart-zone-heating/validate.yml?label=HACS%20%26%20Hassfest)](https://github.com/pasmi/ha-smart-zone-heating/actions)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/pasmi/ha-smart-zone-heating/releases)
+[![HACS Validation](https://img.shields.io/github/actions/workflow/status/pasmimmo/ha-smart-zone-heating/validate.yml?label=HACS%20%26%20Hassfest)](https://github.com/pasmimmo/ha-smart-zone-heating/actions)
+[![Version](https://img.shields.io/badge/version-0.9.0--pre-orange.svg)](https://github.com/pasmimmo/ha-smart-zone-heating/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-41BDF5.svg)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-🌍 **Language / Lingua:** [**🇬🇧 English**](#-english-documentation) | [**🇮🇹 Italiano**](#-documentazione-in-italiano)
+🌍 **Language / Lingua:** [**🇮🇹 Italiano**](#-documentazione-in-italiano) | [**🇬🇧 English**](#-english-documentation)
 
 ---
 
@@ -14,6 +14,19 @@
 **Smart Zone Heating** è un'integrazione custom per **Home Assistant** progettata per gestire impianti di riscaldamento multi-zona (es. *Piano 1 / Piano 2*, *Zona Giorno / Zona Notte*, o $N$ stanze) abbinati a qualsiasi generatore di calore (**stufa a pellet**, **termocamino**, **caldaia a biomassa** o **caldaia tradizionale**).
 
 Elimina la necessità di creare decine di `generic_thermostat`, `input_boolean` virtuali, timer e automazioni incrociate, raggruppando l'intero impianto sotto **un unico Dispositivo nativo** di Home Assistant.
+
+---
+
+## 📊 Architettura e Logica di Funzionamento
+
+### 1. Architettura Generale del Sistema
+![Architettura del Sistema](docs/assets/architecture.svg)
+
+### 2. Macchina a Stati: Riscaldamento, Smaltimento (Watt + Timer Fallback) e Sicurezza
+![Macchina a Stati](docs/assets/state_machine.svg)
+
+### 3. Priorità Apertura Valvole di Zona
+![Logica Apertura Valvole](docs/assets/valve_logic.svg)
 
 ---
 
@@ -39,89 +52,13 @@ Elimina la necessità di creare decine di `generic_thermostat`, `input_boolean` 
 
 ---
 
-## 📊 Diagrammi di Architettura e Funzionamento (IT)
-
-### 1. Architettura del Componente
-```mermaid
-flowchart LR
-    subgraph Ingressi["🌡️ Sensori Fisici"]
-        T1["Sensore Temp Zona 1"]
-        T2["Sensore Temp Zona N"]
-        PW["Presa Smart (Watt)"]
-        CLK["Orologio Giorno/Notte"]
-    end
-
-    subgraph Core["🧠 Smart Zone Heating (Dispositivo HA)"]
-        COORD["Coordinator Centrale"]
-        CL1["Termostato Zona 1\n(Giorno / Notte / Fuori Casa)"]
-        CL2["Termostato Zona N\n(Giorno / Notte / Fuori Casa)"]
-        PROB["Sensore Problema\n(Fail-Safe)"]
-    end
-
-    subgraph Uscite["⚡ Attuatori e Notifiche"]
-        V1["Switch Valvola Zona 1"]
-        V2["Switch Valvola Zona N"]
-        HT["Switch Generatore\n(Stufa / Caldaia)"]
-        NOTIF["Servizio Notifica\n(Error / Warning / Debug)"]
-    end
-
-    T1 --> COORD
-    T2 --> COORD
-    PW --> COORD
-    CLK --> COORD
-    CL1 <--> COORD
-    CL2 <--> COORD
-    COORD --> PROB
-    COORD --> V1
-    COORD --> V2
-    COORD --> HT
-    COORD --> NOTIF
-```
-
-### 2. Macchina a Stati dell'Impianto
-```mermaid
-stateDiagram-v2
-    [*] --> Inattivo
-
-    Inattivo --> Riscaldamento : Almeno 1 zona chiede calore\n(Temp <= Target - Isteresi)
-    Riscaldamento --> Riscaldamento : Altre zone aprono/chiudono\nle rispettive valvole
-
-    Riscaldamento --> Smaltimento_Watt : Tutte le zone in temperatura\n(Sensore Watt disponibile)
-    Riscaldamento --> Smaltimento_Timer : Tutte le zone in temperatura\n(Sensore Watt assente o offline)
-
-    Smaltimento_Watt --> Smaltimento_Timer : Sensore Watt diventa unavailable\n(Warning + Fallback automatico)
-    Smaltimento_Watt --> Inattivo : Consumo < Soglia W\n(Chiusura valvola smaltimento)
-    Smaltimento_Timer --> Inattivo : Scadenza Timer (es. 60 min)\n(Chiusura valvola smaltimento)
-
-    Smaltimento_Watt --> Riscaldamento : Nuova richiesta calore da una zona
-    Smaltimento_Timer --> Riscaldamento : Nuova richiesta calore da una zona
-
-    Inattivo --> Sicurezza_Manuale : Consumo >= Soglia W a impianto spento\n(Apre valvola di sicurezza + Warning)
-    Sicurezza_Manuale --> Inattivo : Consumo < Soglia W
-    Sicurezza_Manuale --> Riscaldamento : Richiesta calore da una zona
-```
-
-### 3. Logica Decisionale delle Valvole (Chi comanda la valvola?)
-```mermaid
-flowchart TD
-    START(["Valutazione Zona i"]) --> CHK_TEMP{"La Zona i richiede calore?\n(Temp <= Target - Isteresi)"}
-    CHK_TEMP -- Sì --> OPEN_HEAT["✅ APRI Valvola Zona i\n+ ACCENDI Switch Generatore"]
-    CHK_TEMP -- No --> CHK_COOL{"È in corso lo Smaltimento Calore\ne Zona i è la Valvola Smaltimento?"}
-    CHK_COOL -- Sì --> OPEN_COOL["✅ APRI Valvola Zona i\n(Motivo: Smaltimento Calore)"]
-    CHK_COOL -- No --> CHK_MAN{"Consumo >= Soglia W a impianto spento\ne Zona i è la Valvola Sicurezza Manuale?"}
-    CHK_MAN -- Sì --> OPEN_MAN["✅ APRI Valvola Zona i\n(Motivo: Sicurezza Accensione Manuale)"]
-    CHK_MAN -- No --> CLOSE["❌ CHIUDI Valvola Zona i"]
-```
-
----
-
 ## 🛠️ Installazione (IT)
 
 ### Metodo 1: Tramite HACS (Consigliato)
 1. Apri **HACS** in Home Assistant.
 2. Clicca sui 3 puntini in alto a destra $\rightarrow$ **Repository personalizzati** (*Custom repositories*).
-3. Inserisci l'URL di questo repository GitHub e seleziona la categoria **Integrazione** (*Integration*).
-4. Clicca su **Scarica** su **Smart Zone Heating**.
+3. Inserisci `https://github.com/pasmimmo/ha-smart-zone-heating` e seleziona la categoria **Integrazione** (*Integration*).
+4. Clicca su **Scarica** su **Smart Zone Heating** (attiva *Mostra versioni beta / pre-release* se necessario per la `0.9.0`).
 5. **Riavvia Home Assistant**.
 
 ### Metodo 2: Installazione Manuale
@@ -203,38 +140,12 @@ It replaces complex chains of `generic_thermostat`, helper `input_boolean` entit
 
 ---
 
-## 📊 Architecture & State Machine Diagrams (EN)
-
-```mermaid
-stateDiagram-v2
-    [*] --> Idle
-
-    Idle --> Heating : At least 1 zone requests heat\n(Temp <= Target - Hysteresis)
-    Heating --> Heating : Individual zones open/close\ntheir own valves
-
-    Heating --> Cooldown_Power : All zones satisfied\n(Power sensor available)
-    Heating --> Cooldown_Timer : All zones satisfied\n(No power sensor or sensor offline)
-
-    Cooldown_Power --> Cooldown_Timer : Power sensor becomes unavailable\n(Warning + Automatic Timer Fallback)
-    Cooldown_Power --> Idle : Power < Threshold W\n(Close cooldown valve)
-    Cooldown_Timer --> Idle : Timer expires (e.g. 60 min)\n(Close cooldown valve)
-
-    Cooldown_Power --> Heating : New heat request from any zone
-    Cooldown_Timer --> Heating : New heat request from any zone
-
-    Idle --> Manual_Safety : Power >= Threshold W while idle\n(Open safety valve + Warning)
-    Manual_Safety --> Idle : Power < Threshold W
-    Manual_Safety --> Heating : Heat request from any zone
-```
-
----
-
 ## 🛠️ Installation (EN)
 
 ### Option 1: Via HACS (Recommended)
 1. Open **HACS** in Home Assistant.
 2. Click the three dots in the top-right corner $\rightarrow$ **Custom repositories**.
-3. Paste the URL of this GitHub repository and select the **Integration** category.
+3. Paste `https://github.com/pasmimmo/ha-smart-zone-heating` and select the **Integration** category.
 4. Click **Download** on **Smart Zone Heating**.
 5. **Restart Home Assistant**.
 

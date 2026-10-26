@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.0] - 2026-10-26
+## [0.9.0] - 2026-10-26 (Pre-release)
 
 ### Added (EN)
 - Multi-zone thermostat creation (`climate`) with **Day**, **Night**, and **Away** preset modes.
