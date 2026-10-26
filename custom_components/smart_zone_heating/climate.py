@@ -1,9 +1,10 @@
-"""Climate entities for Smart Zone Heating zones."""
+"""Climate entities for Smart Zone Heating zones with Day / Night / Away presets."""
 from __future__ import annotations
 
 from typing import Any
 
 from homeassistant.components.climate import (
+    ATTR_PRESET_MODE,
     ClimateEntity,
     ClimateEntityFeature,
     HVACAction,
@@ -15,7 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, PRESET_AWAY, PRESET_DAY, PRESET_NIGHT
 from .coordinator import SmartZoneHeatingCoordinator, ZoneRuntimeState
 
 
@@ -34,13 +35,16 @@ async def async_setup_entry(
 
 
 class SmartZoneThermostat(ClimateEntity, RestoreEntity):
-    """Virtual Thermostat for a single heating zone."""
+    """Virtual Thermostat for a single heating zone with Day, Night, and Away modes."""
 
     _attr_has_entity_name = True
+    _attr_translation_key = "zone_thermostat"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
+    _attr_preset_modes = [PRESET_DAY, PRESET_NIGHT, PRESET_AWAY]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.PRESET_MODE
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
@@ -62,12 +66,28 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
         return self.coordinator.zones[self.zone_id]
 
     async def async_added_to_hass(self) -> None:
-        """Restore previous target temperature and HVAC mode on startup."""
+        """Restore previous target temperatures, preset mode, and HVAC mode on startup."""
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
         if last_state is not None:
             if last_state.state in (HVACMode.HEAT, HVACMode.OFF):
                 self.zone.hvac_mode_enabled = last_state.state == HVACMode.HEAT
+
+            for attr_key, prop_name in (
+                ("temp_day", "temp_day"),
+                ("temp_night", "temp_night"),
+                ("temp_away", "temp_away"),
+            ):
+                if (val := last_state.attributes.get(attr_key)) is not None:
+                    try:
+                        setattr(self.zone, prop_name, float(val))
+                    except (ValueError, TypeError):
+                        pass
+
+            restored_preset = last_state.attributes.get(ATTR_PRESET_MODE)
+            if restored_preset in self._attr_preset_modes:
+                self.zone.apply_preset(restored_preset)
+
             restored_temp = last_state.attributes.get(ATTR_TEMPERATURE)
             if restored_temp is not None:
                 try:
@@ -92,6 +112,10 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
         return self.zone.target_temp
 
     @property
+    def preset_mode(self) -> str | None:
+        return self.zone.preset_mode
+
+    @property
     def hvac_mode(self) -> HVACMode:
         return HVACMode.HEAT if self.zone.hvac_mode_enabled else HVACMode.OFF
 
@@ -106,16 +130,34 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
         return {
             "valve_entity": self.zone.valve_entity,
             "temp_sensor": self.zone.temp_sensor,
+            "temp_day": self.zone.temp_day,
+            "temp_night": self.zone.temp_night,
+            "temp_away": self.zone.temp_away,
             "requesting_heat": self.zone.requesting_heat,
+            "forced_open_reason": self.zone.forced_open_reason,
         }
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set new target temperature."""
+        """Set new target temperature and save it for the currently active preset."""
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is not None:
-            self.zone.target_temp = float(temp)
+            new_temp = float(temp)
+            self.zone.target_temp = new_temp
+            if self.zone.preset_mode == PRESET_DAY:
+                self.zone.temp_day = new_temp
+            elif self.zone.preset_mode == PRESET_NIGHT:
+                self.zone.temp_night = new_temp
+            elif self.zone.preset_mode == PRESET_AWAY:
+                self.zone.temp_away = new_temp
+            await self.coordinator.async_evaluate()
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set new preset mode (day, night, away)."""
+        if preset_mode in self._attr_preset_modes:
+            self.zone.apply_preset(preset_mode)
             await self.coordinator.async_evaluate()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""
         self.zone.hvac_mode_enabled = hvac_mode == HVACMode.HEAT
         await self.coordinator.async_evaluate()
+

@@ -2,22 +2,49 @@
   "config": {
     "step": {
       "user": {
-        "title": "Step 1: Heater and Number of Zones",
-        "description": "Select the main heater switch (pellet stove, boiler, etc.) and the number of heating zones.",
+        "title": "Step 1: Number of Zones/Floors & Day/Night Schedule",
+        "description": "Set the system name, how many zones/floors you have, and the hours for automatic Day / Night switching.",
         "data": {
           "system_name": "System name",
-          "heater_entity": "Heater (Stove / Boiler switch)",
-          "zone_count": "Number of zones (zone valves)"
+          "zone_count": "How many zones / floors?",
+          "schedule_enabled": "Enable automatic Day / Night hourly schedule",
+          "day_start_time": "Day mode start time",
+          "night_start_time": "Night mode start time"
         }
       },
       "zone": {
-        "title": "Configure Zone {zone_num} of {zone_total}",
-        "description": "Set the zone name, zone valve switch, and initial temperature sensor (you can change the sensor anytime from the Device page).",
+        "title": "Step 2: Zone Thermostat {zone_num} of {zone_total}",
+        "description": "Configure the zone valve, temperature sensor, and target temperatures for Day, Night, and Away modes.",
         "data": {
-          "zone_name": "Zone name (e.g. First Floor, Day Zone)",
-          "valve_entity": "Zone valve (Switch)",
+          "zone_name": "Zone / Floor name (e.g. Floor 1, Day Zone)",
+          "valve_entity": "Zone valve switch",
           "temp_sensor": "Temperature sensor",
-          "target_temp": "Initial target temperature (°C)"
+          "temp_day": "Day mode temperature (°C)",
+          "temp_night": "Night mode temperature (°C)",
+          "temp_away": "Away mode temperature (°C)"
+        }
+      },
+      "heater_and_safety": {
+        "title": "Step 3: Heater, Safety (Watt + Timer Fallback) & Notifications",
+        "description": "When a power sensor (Watts) is configured, it decides when to close the cooldown valve (below threshold W), using the timer as a fallback if the sensor becomes unavailable.",
+        "data": {
+          "heater_entity": "Heater switch (Stove / Boiler)",
+          "master_enabled": "Master switch System Enabled",
+          "power_sensor": "Heater power consumption sensor in Watts (primary for cooldown & safety)",
+          "power_threshold_watt": "Minimum power threshold (Watts) for cooldown & manual ignition",
+          "power_grace_seconds": "Initial confirmation / grace time (seconds)",
+          "cooldown_minutes": "Fallback heat dissipation timer (minutes, used if power sensor is unavailable)",
+          "cooldown_zone_id": "Zone valve to open for heat dissipation / safety",
+          "use_separate_manual_zone": "Use another valve for manual ignition",
+          "notify_service": "Optional notification service (e.g. notify.mobile_app_...)",
+          "notify_level": "Notification level (Off / Error / Warning / Debug)"
+        }
+      },
+      "manual_zone": {
+        "title": "Step 4: Manual Ignition Safety Valve",
+        "description": "Select which zone valve to open when power consumption exceeds the threshold while idle.",
+        "data": {
+          "manual_safety_zone_id": "Zone valve to open on manual ignition (> threshold W)"
         }
       }
     }
@@ -25,11 +52,57 @@
   "options": {
     "step": {
       "init": {
-        "title": "Heater Settings",
+        "title": "Heater, Safety & Notification Settings",
+        "description": "Update heater switch, Day/Night hours, Watt cooldown / fallback timer, and notifications.",
         "data": {
-          "heater_entity": "Heater (Stove / Boiler switch)"
+          "heater_entity": "Heater switch (Stove / Boiler)",
+          "master_enabled": "Master switch System Enabled",
+          "schedule_enabled": "Enable automatic Day / Night hourly schedule",
+          "day_start_time": "Day mode start time",
+          "night_start_time": "Night mode start time",
+          "power_sensor": "Heater power consumption sensor in Watts (primary for cooldown & safety)",
+          "power_threshold_watt": "Minimum power threshold (Watts) for cooldown & manual ignition",
+          "power_grace_seconds": "Initial confirmation / grace time (seconds)",
+          "cooldown_minutes": "Fallback heat dissipation timer (minutes, used if power sensor is unavailable)",
+          "cooldown_zone_id": "Zone valve to open for heat dissipation / safety",
+          "use_separate_manual_zone": "Use another valve for manual ignition",
+          "notify_service": "Optional notification service (e.g. notify.mobile_app_...)",
+          "notify_level": "Notification level (Off / Error / Warning / Debug)"
+        }
+      },
+      "manual_zone": {
+        "title": "Manual Ignition Safety Valve",
+        "description": "Select which zone valve to open when power consumption exceeds the threshold while idle.",
+        "data": {
+          "manual_safety_zone_id": "Zone valve to open on manual ignition (> threshold W)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "zone_thermostat": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "day": "Day",
+              "night": "Night",
+              "away": "Away"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "notify_level": {
+        "state": {
+          "off": "Off",
+          "error": "Errors Only",
+          "warning": "Warnings + Errors",
+          "debug": "All Events (Debug)"
         }
       }
     }
   }
 }
+

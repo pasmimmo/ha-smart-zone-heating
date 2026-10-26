@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfPower, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -19,7 +19,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up configuration number entities."""
     coordinator: SmartZoneHeatingCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([HysteresisNumber(coordinator)])
+    async_add_entities(
+        [
+            HysteresisNumber(coordinator),
+            CooldownMinutesNumber(coordinator),
+            PowerThresholdNumber(coordinator),
+        ]
+    )
 
 
 class HysteresisNumber(NumberEntity, RestoreEntity):
@@ -64,3 +70,92 @@ class HysteresisNumber(NumberEntity, RestoreEntity):
     async def async_set_native_value(self, value: float) -> None:
         self.coordinator.hysteresis = float(value)
         await self.coordinator.async_evaluate()
+
+
+class CooldownMinutesNumber(NumberEntity, RestoreEntity):
+    """Number entity to configure heat dissipation duration in minutes."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Durata Smaltimento Calore"
+    _attr_icon = "mdi:timer-sand"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_min_value = 0
+    _attr_native_max_value = 240
+    _attr_native_step = 5
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, coordinator: SmartZoneHeatingCoordinator) -> None:
+        self.coordinator = coordinator
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_cooldown_minutes"
+        self._attr_device_info = coordinator.device_info
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in ("unknown", "unavailable"):
+            try:
+                self.coordinator.cooldown_minutes = int(float(last_state.state))
+            except (ValueError, TypeError):
+                pass
+
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self._handle_coordinator_update)
+        )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float:
+        return float(self.coordinator.cooldown_minutes)
+
+    async def async_set_native_value(self, value: float) -> None:
+        self.coordinator.cooldown_minutes = int(value)
+        await self.coordinator.async_evaluate()
+
+
+class PowerThresholdNumber(NumberEntity, RestoreEntity):
+    """Number entity to configure minimum power threshold in Watts for manual ignition safety."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Soglia Consumo Sicurezza"
+    _attr_icon = "mdi:flash-alert"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_native_min_value = 1.0
+    _attr_native_max_value = 1000.0
+    _attr_native_step = 1.0
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, coordinator: SmartZoneHeatingCoordinator) -> None:
+        self.coordinator = coordinator
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_power_threshold_watt"
+        self._attr_device_info = coordinator.device_info
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in ("unknown", "unavailable"):
+            try:
+                self.coordinator.power_threshold_watt = float(last_state.state)
+            except (ValueError, TypeError):
+                pass
+
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self._handle_coordinator_update)
+        )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float:
+        return self.coordinator.power_threshold_watt
+
+    async def async_set_native_value(self, value: float) -> None:
+        self.coordinator.power_threshold_watt = float(value)
+        await self.coordinator.async_evaluate()
+

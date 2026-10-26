@@ -2,22 +2,49 @@
   "config": {
     "step": {
       "user": {
-        "title": "Passo 1: Generatore e Numero di Zone",
-        "description": "Seleziona lo switch che pilota il generatore di calore (stufa, caldaia, ecc.) e il numero di zone/piani da controllare.",
+        "title": "Passo 1: Numero di Zone/Piani e Orari Giorno/Notte",
+        "description": "Imposta il nome dell'impianto, quante zone o piani hai, e gli orari per il cambio automatico Giorno / Notte.",
         "data": {
           "system_name": "Nome dell'impianto",
-          "heater_entity": "Heater (Switch Stufa / Caldaia)",
-          "zone_count": "Numero di zone (valvole di zona)"
+          "zone_count": "Quante zone / piani vuoi configurare?",
+          "schedule_enabled": "Abilita cambio automatico per fascia oraria Giorno / Notte",
+          "day_start_time": "Orario inizio modalità Giorno",
+          "night_start_time": "Orario inizio modalità Notte"
         }
       },
       "zone": {
-        "title": "Configurazione Zona {zone_num} di {zone_total}",
-        "description": "Imposta il nome della zona, la valvola associata e il sensore di temperatura iniziale (potrai cambiarlo anche al volo dalla pagina del dispositivo).",
+        "title": "Passo 2: Termostato Zona {zone_num} di {zone_total}",
+        "description": "Configura la valvola di zona, il sensore di temperatura e le 3 temperature per Giorno, Notte e Fuori Casa.",
         "data": {
-          "zone_name": "Nome della zona (es. Primo Piano, Zona Giorno)",
-          "valve_entity": "Valvola di zona (Switch)",
+          "zone_name": "Nome della zona / piano (es. Piano 1, Zona Giorno)",
+          "valve_entity": "Switch Valvola di zona",
           "temp_sensor": "Sensore di temperatura",
-          "target_temp": "Temperatura desiderata iniziale (°C)"
+          "temp_day": "Temperatura modalità Giorno (°C)",
+          "temp_night": "Temperatura modalità Notte (°C)",
+          "temp_away": "Temperatura modalità Fuori Casa (°C)"
+        }
+      },
+      "heater_and_safety": {
+        "title": "Passo 3: Generatore, Sicurezza (Watt + Timer Fallback) e Notifiche",
+        "description": "Se selezioni il sensore di consumo (Watt), sarà lui a decidere quando chiudere la valvola di smaltimento (sotto la soglia W), usando il timer solo come fallback in caso di sensore indisponibile.",
+        "data": {
+          "heater_entity": "Switch Generatore (Heater Stufa / Caldaia)",
+          "master_enabled": "Interruttore generale Impianto Abilitato",
+          "power_sensor": "Sensore di consumo stufa in Watt (primario per smaltimento e sicurezza)",
+          "power_threshold_watt": "Soglia minima consumo (Watt) per smaltimento e accensione manuale",
+          "power_grace_seconds": "Tempo di conferma / tolleranza iniziale (secondi)",
+          "cooldown_minutes": "Timer di fallback smaltimento calore (minuti, usato se manca il sensore Watt)",
+          "cooldown_zone_id": "Valvola di zona da aprire per smaltimento calore / sicurezza",
+          "use_separate_manual_zone": "Usa un'altra valvola per l'accensione manuale (Use another for manual)",
+          "notify_service": "Servizio di notifica opzionale (es. notify.mobile_app_...)",
+          "notify_level": "Livello notifiche (Off / Error / Warning / Debug)"
+        }
+      },
+      "manual_zone": {
+        "title": "Passo 4: Valvola per Accensione Manuale",
+        "description": "Scegli quale valvola aprire quando il consumo supera la soglia in Watt a impianto spento.",
+        "data": {
+          "manual_safety_zone_id": "Valvola di zona da aprire in caso di accensione manuale (> soglia W)"
         }
       }
     }
@@ -25,11 +52,57 @@
   "options": {
     "step": {
       "init": {
-        "title": "Impostazioni Generatore",
+        "title": "Configurazione Generatore, Sicurezza e Notifiche",
+        "description": "Modifica switch generatore, orari Giorno/Notte, controllo Watt / timer di fallback e notifiche.",
         "data": {
-          "heater_entity": "Heater (Switch Stufa / Caldaia)"
+          "heater_entity": "Switch Generatore (Heater Stufa / Caldaia)",
+          "master_enabled": "Interruttore generale Impianto Abilitato",
+          "schedule_enabled": "Abilita cambio automatico per fascia oraria Giorno / Notte",
+          "day_start_time": "Orario inizio modalità Giorno",
+          "night_start_time": "Orario inizio modalità Notte",
+          "power_sensor": "Sensore di consumo stufa in Watt (primario per smaltimento e sicurezza)",
+          "power_threshold_watt": "Soglia minima consumo (Watt) per smaltimento e accensione manuale",
+          "power_grace_seconds": "Tempo di conferma / tolleranza iniziale (secondi)",
+          "cooldown_minutes": "Timer di fallback smaltimento calore (minuti, usato se manca il sensore Watt)",
+          "cooldown_zone_id": "Valvola di zona da aprire per smaltimento calore / sicurezza",
+          "use_separate_manual_zone": "Usa un'altra valvola per l'accensione manuale (Use another for manual)",
+          "notify_service": "Servizio di notifica opzionale (es. notify.mobile_app_...)",
+          "notify_level": "Livello notifiche (Off / Error / Warning / Debug)"
+        }
+      },
+      "manual_zone": {
+        "title": "Valvola per Accensione Manuale",
+        "description": "Scegli quale valvola aprire quando il consumo supera la soglia in Watt a impianto spento.",
+        "data": {
+          "manual_safety_zone_id": "Valvola di zona da aprire in caso di accensione manuale (> soglia W)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "zone_thermostat": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "day": "Giorno",
+              "night": "Notte",
+              "away": "Fuori Casa"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "notify_level": {
+        "state": {
+          "off": "Disabilitate (Off)",
+          "error": "Solo Errori (Error)",
+          "warning": "Warning + Errori",
+          "debug": "Tutti gli eventi (Debug)"
         }
       }
     }
   }
 }
+
