@@ -22,7 +22,7 @@
   <rect x="1" y="1" width="978" height="418" rx="15" fill="none" stroke="#334155" stroke-width="1.5"/>
 
   <text x="490" y="38" text-anchor="middle" fill="#f8fafc" font-size="19" font-weight="700">PRIORITÀ APERTURA VALVOLE DI ZONA (PER OGNI CICLO)</text>
-  <text x="490" y="58" text-anchor="middle" fill="#94a3b8" font-size="12">Una valvola non viene mai chiusa dal suo termostato se è richiesta dallo Smaltimento Calore o dalla Sicurezza &gt;10W</text>
+  <text x="490" y="58" text-anchor="middle" fill="#94a3b8" font-size="12">Una valvola non viene mai chiusa dal suo termostato se è richiesta dallo Smaltimento Calore o dalla Sicurezza &gt; Soglia W</text>
 
   <!-- Step 1: Check Sensor & Thermostat -->
   <g filter="url(#boxShadow)">
@@ -44,7 +44,7 @@
   <g filter="url(#boxShadow)">
     <rect x="580" y="100" width="210" height="90" rx="12" fill="#1e293b" stroke="#eab308" stroke-width="2"/>
     <text x="685" y="128" text-anchor="middle" fill="#facc15" font-size="13" font-weight="700">3. Sicurezza &gt; Soglia W?</text>
-    <text x="685" y="148" text-anchor="middle" fill="#e2e8f0" font-size="11">Consumo &gt;= 10W a freddo &amp;</text>
+    <text x="685" y="148" text-anchor="middle" fill="#e2e8f0" font-size="11">Potenza &gt;= Soglia W a freddo &amp;</text>
     <text x="685" y="165" text-anchor="middle" fill="#e2e8f0" font-size="11">Zona == Valvola Manuale</text>
   </g>
 
@@ -59,9 +59,9 @@
   <g filter="url(#boxShadow)">
     <rect x="40" y="285" width="750" height="85" rx="14" fill="#064e3b" stroke="#10b981" stroke-width="2.5"/>
     <text x="415" y="318" text-anchor="middle" fill="#6ee7b7" font-size="16" font-weight="700">✅ APRI VALVOLA DI ZONA (SWITCH ON)</text>
-    <text x="145" y="348" text-anchor="middle" fill="#d1fae5" font-size="12">+ Accendi Stufa (Heater ON)</text>
-    <text x="415" y="348" text-anchor="middle" fill="#d1fae5" font-size="12">Stufa OFF • Smaltisce calore residuo</text>
-    <text x="685" y="348" text-anchor="middle" fill="#d1fae5" font-size="12">Stufa OFF • Protegge pompa circolatore</text>
+    <text x="145" y="348" text-anchor="middle" fill="#d1fae5" font-size="12">+ Accendi Generatore di Calore</text>
+    <text x="415" y="348" text-anchor="middle" fill="#d1fae5" font-size="12">Generatore OFF • Smaltisce calore residuo</text>
+    <text x="685" y="348" text-anchor="middle" fill="#d1fae5" font-size="12">Generatore OFF • Protegge circolatore</text>
   </g>
 
   <!-- Horizontal No Arrows -->

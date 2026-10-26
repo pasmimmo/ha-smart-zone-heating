@@ -2,11 +2,11 @@
   "config": {
     "step": {
       "user": {
-        "title": "Passo 1: Numero di Zone/Piani e Orari Giorno/Notte",
-        "description": "Imposta il nome dell'impianto, quante zone o piani hai, e gli orari per il cambio automatico Giorno / Notte.",
+        "title": "Passo 1: Numero di Zone e Orari Giorno/Notte",
+        "description": "Imposta il nome dell'impianto, quante zone termiche hai e gli orari per il cambio automatico Giorno / Notte.",
         "data": {
           "system_name": "Nome dell'impianto",
-          "zone_count": "Quante zone / piani vuoi configurare?",
+          "zone_count": "Quante zone termiche vuoi configurare?",
           "schedule_enabled": "Abilita cambio automatico per fascia oraria Giorno / Notte",
           "day_start_time": "Orario inizio modalità Giorno",
           "night_start_time": "Orario inizio modalità Notte"
@@ -16,7 +16,7 @@
         "title": "Passo 2: Termostato Zona {zone_num} di {zone_total}",
         "description": "Configura la valvola di zona, il sensore di temperatura e le 3 temperature per Giorno, Notte e Fuori Casa.",
         "data": {
-          "zone_name": "Nome della zona / piano (es. Piano 1, Zona Giorno)",
+          "zone_name": "Nome della zona (es. Zona Giorno, Zona Notte, Piano 1)",
           "valve_entity": "Switch Valvola di zona",
           "temp_sensor": "Sensore di temperatura",
           "temp_day": "Temperatura modalità Giorno (°C)",
@@ -25,13 +25,13 @@
         }
       },
       "heater_and_safety": {
-        "title": "Passo 3: Generatore, Sicurezza (Watt + Timer Fallback) e Notifiche",
-        "description": "Se selezioni il sensore di consumo (Watt), sarà lui a decidere quando chiudere la valvola di smaltimento (sotto la soglia W), usando il timer solo come fallback in caso di sensore indisponibile.",
+        "title": "Passo 3: Generatore di Calore, Sicurezza e Notifiche",
+        "description": "Se selezioni il sensore di potenza (Watt) del generatore di calore, sarà lui a decidere quando chiudere la valvola di smaltimento (sotto la soglia W), usando il timer solo come fallback in caso di sensore indisponibile.",
         "data": {
-          "heater_entity": "Switch Generatore (Heater Stufa / Caldaia)",
+          "heater_entity": "Switch Generatore di Calore (contatto pulito / relè)",
           "master_enabled": "Interruttore generale Impianto Abilitato",
-          "power_sensor": "Sensore di consumo stufa in Watt (primario per smaltimento e sicurezza)",
-          "power_threshold_watt": "Soglia minima consumo (Watt) per smaltimento e accensione manuale",
+          "power_sensor": "Sensore di potenza del Generatore di Calore in Watt (opzionale)",
+          "power_threshold_watt": "Soglia minima potenza (Watt) per smaltimento e accensione manuale",
           "power_grace_seconds": "Tempo di conferma / tolleranza iniziale (secondi)",
           "cooldown_minutes": "Timer di fallback smaltimento calore (minuti, usato se manca il sensore Watt)",
           "cooldown_zone_id": "Valvola di zona da aprire per smaltimento calore / sicurezza",
@@ -42,7 +42,7 @@
       },
       "manual_zone": {
         "title": "Passo 4: Valvola per Accensione Manuale",
-        "description": "Scegli quale valvola aprire quando il consumo supera la soglia in Watt a impianto spento.",
+        "description": "Scegli quale valvola aprire quando l'assorbimento del generatore supera la soglia in Watt a impianto spento.",
         "data": {
           "manual_safety_zone_id": "Valvola di zona da aprire in caso di accensione manuale (> soglia W)"
         }
@@ -52,16 +52,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Configurazione Generatore, Sicurezza e Notifiche",
-        "description": "Modifica switch generatore, orari Giorno/Notte, controllo Watt / timer di fallback e notifiche.",
+        "title": "Configurazione Generatore di Calore, Sicurezza e Notifiche",
+        "description": "Modifica switch del generatore di calore, orari Giorno/Notte, controllo Watt / timer di fallback e notifiche.",
         "data": {
-          "heater_entity": "Switch Generatore (Heater Stufa / Caldaia)",
+          "heater_entity": "Switch Generatore di Calore (contatto pulito / relè)",
           "master_enabled": "Interruttore generale Impianto Abilitato",
           "schedule_enabled": "Abilita cambio automatico per fascia oraria Giorno / Notte",
           "day_start_time": "Orario inizio modalità Giorno",
           "night_start_time": "Orario inizio modalità Notte",
-          "power_sensor": "Sensore di consumo stufa in Watt (primario per smaltimento e sicurezza)",
-          "power_threshold_watt": "Soglia minima consumo (Watt) per smaltimento e accensione manuale",
+          "power_sensor": "Sensore di potenza del Generatore di Calore in Watt (opzionale)",
+          "power_threshold_watt": "Soglia minima potenza (Watt) per smaltimento e accensione manuale",
           "power_grace_seconds": "Tempo di conferma / tolleranza iniziale (secondi)",
           "cooldown_minutes": "Timer di fallback smaltimento calore (minuti, usato se manca il sensore Watt)",
           "cooldown_zone_id": "Valvola di zona da aprire per smaltimento calore / sicurezza",
@@ -72,7 +72,7 @@
       },
       "manual_zone": {
         "title": "Valvola per Accensione Manuale",
-        "description": "Scegli quale valvola aprire quando il consumo supera la soglia in Watt a impianto spento.",
+        "description": "Scegli quale valvola aprire quando l'assorbimento del generatore supera la soglia in Watt a impianto spento.",
         "data": {
           "manual_safety_zone_id": "Valvola di zona da aprire in caso di accensione manuale (> soglia W)"
         }
@@ -105,4 +105,3 @@
     }
   }
 }
-
