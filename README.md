@@ -202,6 +202,13 @@ Open `http://localhost:8123` in your browser. The test instance (`ha_test_config
 
 ---
 
+## 🤝 Crediti / Credits
+
+* **Ideazione, architettura impianto e casi d'uso reali:** [@pasmimmo](https://github.com/pasmimmo)
+* **Sviluppo in Pair Programming, codice e diagrammi:** **Antigravity** *(Google DeepMind)*
+
+---
+
 ## 📄 License
 
 Distributed under the **MIT License**. See [LICENSE](LICENSE) for more information.
