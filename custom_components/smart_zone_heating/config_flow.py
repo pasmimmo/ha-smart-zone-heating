@@ -58,35 +58,6 @@ from .const import (
 from .coordinator import CONF_HYSTERESIS
 
 
-def _get_notify_service_options(hass: HomeAssistant) -> list[selector.SelectOptionDict]:
-    """Build list of available notify.* services in Home Assistant."""
-    options = [selector.SelectOptionDict(value="none", label="Nessuno (Disabilitato)")]
-    notify_services = hass.services.async_services().get("notify", {})
-    for svc_name in sorted(notify_services.keys()):
-        full_name = f"notify.{svc_name}"
-        options.append(selector.SelectOptionDict(value=full_name, label=full_name))
-    return options
-
-
-def _get_notify_level_options() -> list[selector.SelectOptionDict]:
-    """Build list of notification levels."""
-    return [
-        selector.SelectOptionDict(value=NOTIFY_LEVEL_OFF, label="Disabilitate (Off)"),
-        selector.SelectOptionDict(
-            value=NOTIFY_LEVEL_ERROR,
-            label="Error (Solo errori critici / sensori indisponibili)",
-        ),
-        selector.SelectOptionDict(
-            value=NOTIFY_LEVEL_WARNING,
-            label="Warning (Errori + accensione manuale / fallback timer)",
-        ),
-        selector.SelectOptionDict(
-            value=NOTIFY_LEVEL_DEBUG,
-            label="Debug (Tutti gli eventi: aperture valvole, generatore, configurazione)",
-        ),
-    ]
-
-
 class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle initial setup wizard for Smart Zone Heating."""
 
@@ -292,7 +263,14 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if cooldown_enabled:
                 return await self.async_step_cooldown()
 
-            return await self.async_step_manual_safety()
+            # Cooldown is OFF -> no Watt sensor configured -> finish directly
+            self._data[CONF_USE_POWER_SENSOR] = False
+            self._data[CONF_POWER_SENSOR] = None
+            self._data[CONF_MANUAL_SAFETY_ENABLED] = False
+            return self.async_create_entry(
+                title=self._data[CONF_SYSTEM_NAME],
+                data=self._data,
+            )
 
         schema = vol.Schema(
             {
@@ -328,8 +306,13 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if use_power:
                 return await self.async_step_power_sensor()
 
+            # Watt monitoring is OFF -> no Watt sensor configured -> finish directly
             self._data[CONF_POWER_SENSOR] = None
-            return await self.async_step_manual_safety()
+            self._data[CONF_MANUAL_SAFETY_ENABLED] = False
+            return self.async_create_entry(
+                title=self._data[CONF_SYSTEM_NAME],
+                data=self._data,
+            )
 
         schema = vol.Schema(
             {
@@ -405,12 +388,7 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_manual_safety(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Step 3.2: Manual ignition detection (checks if a Watt sensor is configured)."""
-        has_power_sensor = bool(self._data.get(CONF_POWER_SENSOR))
-
-        if not has_power_sensor:
-            return await self.async_step_manual_safety_no_watt()
-
+        """Step 3.2: Manual ignition detection (only reached when a Watt sensor has been set)."""
         if user_input is not None:
             manual_enabled = bool(user_input.get(CONF_MANUAL_SAFETY_ENABLED, True))
             use_separate = bool(user_input.get(CONF_USE_SEPARATE_MANUAL_ZONE, False))
@@ -432,80 +410,6 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(step_id="manual_safety", data_schema=schema)
-
-    async def async_step_manual_safety_no_watt(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
-        """Step 3.2b: Shown when no Watt sensor was configured in Step 2."""
-        if user_input is not None:
-            want_manual = bool(user_input.get(CONF_MANUAL_SAFETY_ENABLED, False))
-            self._data[CONF_MANUAL_SAFETY_ENABLED] = want_manual
-            if want_manual:
-                return await self.async_step_manual_watt_setup()
-
-            return self.async_create_entry(
-                title=self._data[CONF_SYSTEM_NAME],
-                data=self._data,
-            )
-
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_MANUAL_SAFETY_ENABLED, default=False): selector.BooleanSelector(),
-            }
-        )
-        return self.async_show_form(step_id="manual_safety_no_watt", data_schema=schema)
-
-    async def async_step_manual_watt_setup(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
-        """Step 3.2c: Configure Watt sensor & valve specifically for manual ignition detection."""
-        zone_options = [
-            selector.SelectOptionDict(value=z[CONF_ZONE_ID], label=z[CONF_ZONE_NAME])
-            for z in self._zones
-        ]
-        default_zone_id = self._data.get(CONF_COOLDOWN_ZONE_ID) or (
-            self._zones[0][CONF_ZONE_ID] if self._zones else ""
-        )
-
-        if user_input is not None:
-            self._data[CONF_POWER_SENSOR] = user_input[CONF_POWER_SENSOR]
-            self._data[CONF_POWER_THRESHOLD_WATT] = float(
-                user_input.get(CONF_POWER_THRESHOLD_WATT, DEFAULT_POWER_THRESHOLD_WATT)
-            )
-            self._data[CONF_USE_SEPARATE_MANUAL_ZONE] = True
-            self._data[CONF_MANUAL_SAFETY_ZONE_ID] = user_input[CONF_MANUAL_SAFETY_ZONE_ID]
-            return self.async_create_entry(
-                title=self._data[CONF_SYSTEM_NAME],
-                data=self._data,
-            )
-
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_POWER_SENSOR): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["sensor", "input_number"])
-                ),
-                vol.Required(
-                    CONF_POWER_THRESHOLD_WATT, default=DEFAULT_POWER_THRESHOLD_WATT
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=1.0,
-                        max=1000.0,
-                        step=1.0,
-                        unit_of_measurement="W",
-                        mode=selector.NumberSelectorMode.BOX,
-                    )
-                ),
-                vol.Required(
-                    CONF_MANUAL_SAFETY_ZONE_ID, default=default_zone_id
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=zone_options,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-            }
-        )
-        return self.async_show_form(step_id="manual_watt_setup", data_schema=schema)
 
     async def async_step_manual_zone(
         self, user_input: dict[str, Any] | None = None
@@ -582,9 +486,11 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             if cooldown_enabled:
                 return await self.async_step_cooldown()
 
-            # Cooldown disabled -> skip to Page 3 (Manual Ignition Detection)
+            # Cooldown disabled -> no Watt sensor configured -> manual ignition safety not available, save directly
             self._pending_options[CONF_USE_POWER_SENSOR] = False
-            return await self.async_step_manual_safety()
+            self._pending_options[CONF_POWER_SENSOR] = None
+            self._pending_options[CONF_MANUAL_SAFETY_ENABLED] = False
+            return self._save_options()
 
         default_cooldown_enabled = bool(data.get(CONF_COOLDOWN_ENABLED, True))
 
@@ -632,9 +538,10 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             if use_power:
                 return await self.async_step_power_sensor()
 
-            # If Watt monitoring is turned off for cooldown, clear power_sensor unless manual safety sets it in step 3
+            # Watt monitoring disabled -> no Watt sensor configured -> manual ignition safety not available, save directly
             self._pending_options[CONF_POWER_SENSOR] = None
-            return await self.async_step_manual_safety()
+            self._pending_options[CONF_MANUAL_SAFETY_ENABLED] = False
+            return self._save_options()
 
         default_use_power = bool(
             data.get(CONF_USE_POWER_SENSOR, bool(data.get(CONF_POWER_SENSOR)))
@@ -691,13 +598,15 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             self._entry.options.get(CONF_POWER_SENSOR)
             or self._entry.data.get(CONF_POWER_SENSOR)
         )
+        power_key = (
+            vol.Required(CONF_POWER_SENSOR, default=current_power_sensor)
+            if current_power_sensor
+            else vol.Required(CONF_POWER_SENSOR)
+        )
 
         schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_POWER_SENSOR,
-                    default=current_power_sensor,
-                ): selector.EntitySelector(
+                power_key: selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["sensor", "input_number"])
                 ),
                 vol.Required(
@@ -735,12 +644,8 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
     async def async_step_manual_safety(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Page 3: Manual ignition detection (checks if a Watt sensor is configured)."""
+        """Page 3 (only reached when a Watt sensor is configured): Manual ignition detection."""
         data = self._current_data()
-        has_power_sensor = bool(self._pending_options.get(CONF_POWER_SENSOR))
-
-        if not has_power_sensor:
-            return await self.async_step_manual_safety_no_watt()
 
         if user_input is not None:
             manual_enabled = bool(user_input.get(CONF_MANUAL_SAFETY_ENABLED, True))
@@ -772,97 +677,6 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             }
         )
         return self.async_show_form(step_id="manual_safety", data_schema=schema)
-
-    async def async_step_manual_safety_no_watt(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
-        """Page 3b: Shown when no Watt sensor is configured — informs user that a Watt sensor is required."""
-        if user_input is not None:
-            want_manual = bool(user_input.get(CONF_MANUAL_SAFETY_ENABLED, False))
-            self._pending_options[CONF_MANUAL_SAFETY_ENABLED] = want_manual
-
-            if want_manual:
-                return await self.async_step_manual_watt_setup()
-
-            self._pending_options[CONF_POWER_SENSOR] = None
-            return self._save_options()
-
-        schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_MANUAL_SAFETY_ENABLED,
-                    default=False,
-                ): selector.BooleanSelector(),
-            }
-        )
-        return self.async_show_form(step_id="manual_safety_no_watt", data_schema=schema)
-
-    async def async_step_manual_watt_setup(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.FlowResult:
-        """Page 3.1b: Configure required Watt sensor and safety valve when cooldown Watt monitoring was not used."""
-        data = self._current_data()
-        zones = data.get(CONF_ZONES, [])
-        zone_options = [
-            selector.SelectOptionDict(value=z[CONF_ZONE_ID], label=z[CONF_ZONE_NAME])
-            for z in zones
-        ]
-        default_zone_id = (
-            data.get(CONF_MANUAL_SAFETY_ZONE_ID)
-            or data.get(CONF_COOLDOWN_ZONE_ID)
-            or (zones[0][CONF_ZONE_ID] if zones else "")
-        )
-
-        if user_input is not None:
-            self._pending_options[CONF_POWER_SENSOR] = user_input[CONF_POWER_SENSOR]
-            self._pending_options[CONF_POWER_THRESHOLD_WATT] = float(
-                user_input.get(CONF_POWER_THRESHOLD_WATT, DEFAULT_POWER_THRESHOLD_WATT)
-            )
-            self._pending_options[CONF_USE_SEPARATE_MANUAL_ZONE] = True
-            self._pending_options[CONF_MANUAL_SAFETY_ZONE_ID] = user_input[
-                CONF_MANUAL_SAFETY_ZONE_ID
-            ]
-            return self._save_options()
-
-        current_power_sensor = (
-            self._entry.options.get(CONF_POWER_SENSOR)
-            or self._entry.data.get(CONF_POWER_SENSOR)
-        )
-
-        schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_POWER_SENSOR,
-                    default=current_power_sensor,
-                ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["sensor", "input_number"])
-                ),
-                vol.Required(
-                    CONF_POWER_THRESHOLD_WATT,
-                    default=float(
-                        data.get(CONF_POWER_THRESHOLD_WATT, DEFAULT_POWER_THRESHOLD_WATT)
-                    ),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=1.0,
-                        max=1000.0,
-                        step=1.0,
-                        unit_of_measurement="W",
-                        mode=selector.NumberSelectorMode.BOX,
-                    )
-                ),
-                vol.Required(
-                    CONF_MANUAL_SAFETY_ZONE_ID,
-                    default=default_zone_id,
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=zone_options,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-            }
-        )
-        return self.async_show_form(step_id="manual_watt_setup", data_schema=schema)
 
     async def async_step_manual_zone(
         self, user_input: dict[str, Any] | None = None
