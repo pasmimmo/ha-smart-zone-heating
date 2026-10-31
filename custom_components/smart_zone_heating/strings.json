@@ -30,6 +30,7 @@
         "data": {
           "heater_entity": "Heat Generator switch (dry-contact / relay)",
           "master_enabled": "Master switch System Enabled",
+          "exclusive_control": "Exclusive Control (hides physical switches and reverts manual toggles)",
           "power_sensor": "Heat Generator power sensor in Watts (optional)",
           "power_threshold_watt": "Minimum power threshold (Watts) for cooldown & manual ignition",
           "power_grace_seconds": "Initial confirmation / grace time (seconds)",
@@ -57,6 +58,7 @@
         "data": {
           "heater_entity": "Heat Generator switch (dry-contact / relay)",
           "master_enabled": "Master switch System Enabled",
+          "exclusive_control": "Exclusive Control (hides physical switches and reverts manual toggles)",
           "schedule_enabled": "Enable automatic Day / Night hourly schedule",
           "day_start_time": "Day mode start time",
           "night_start_time": "Night mode start time",

@@ -13,6 +13,7 @@ from .const import (
     CONF_COOLDOWN_MINUTES,
     CONF_COOLDOWN_ZONE_ID,
     CONF_DAY_START_TIME,
+    CONF_EXCLUSIVE_CONTROL,
     CONF_HEATER_ENTITY,
     CONF_MANUAL_SAFETY_ZONE_ID,
     CONF_MASTER_ENABLED,
@@ -76,7 +77,7 @@ def _get_notify_level_options() -> list[selector.SelectOptionDict]:
         ),
         selector.SelectOptionDict(
             value=NOTIFY_LEVEL_DEBUG,
-            label="Debug (Tutti gli eventi: aperture valvole, stufa, cambio orario)",
+            label="Debug (Tutti gli eventi: aperture valvole, generatore, cambio orario)",
         ),
     ]
 
@@ -228,10 +229,13 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_heater_and_safety(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Step 3: Main Heater switch, Power/Cooldown safety, and optional Notifier."""
+        """Step 3: Main Heater switch, Exclusive Control, Power/Cooldown safety, and Notifier."""
         if user_input is not None:
             self._data[CONF_HEATER_ENTITY] = user_input[CONF_HEATER_ENTITY]
             self._data[CONF_MASTER_ENABLED] = bool(user_input.get(CONF_MASTER_ENABLED, True))
+            self._data[CONF_EXCLUSIVE_CONTROL] = bool(
+                user_input.get(CONF_EXCLUSIVE_CONTROL, False)
+            )
             self._data[CONF_COOLDOWN_MINUTES] = int(
                 user_input.get(CONF_COOLDOWN_MINUTES, DEFAULT_COOLDOWN_MINUTES)
             )
@@ -278,6 +282,7 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
                 ),
                 vol.Required(CONF_MASTER_ENABLED, default=True): selector.BooleanSelector(),
+                vol.Required(CONF_EXCLUSIVE_CONTROL, default=False): selector.BooleanSelector(),
                 vol.Optional(CONF_POWER_SENSOR): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["sensor", "input_number"])
                 ),
@@ -395,7 +400,7 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow to change heater, schedule, cooldown, power sensor, and notifications."""
+    """Handle options flow to change heater, exclusive control, schedule, cooldown, and notifications."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
@@ -405,7 +410,7 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Manage heater, schedule, cooldown, power consumption, and notifier options."""
+        """Manage heater, exclusive control, schedule, cooldown, power sensor, and notifier options."""
         data = {**self._entry.data, **self._entry.options}
         zones = data.get(CONF_ZONES, [])
 
@@ -413,6 +418,9 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             new_options = dict(self._entry.options)
             new_options[CONF_HEATER_ENTITY] = user_input[CONF_HEATER_ENTITY]
             new_options[CONF_MASTER_ENABLED] = bool(user_input.get(CONF_MASTER_ENABLED, True))
+            new_options[CONF_EXCLUSIVE_CONTROL] = bool(
+                user_input.get(CONF_EXCLUSIVE_CONTROL, False)
+            )
             new_options[CONF_SCHEDULE_ENABLED] = bool(
                 user_input.get(CONF_SCHEDULE_ENABLED, True)
             )
@@ -470,6 +478,10 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             vol.Required(
                 CONF_MASTER_ENABLED,
                 default=data.get(CONF_MASTER_ENABLED, True),
+            ): selector.BooleanSelector(),
+            vol.Required(
+                CONF_EXCLUSIVE_CONTROL,
+                default=data.get(CONF_EXCLUSIVE_CONTROL, False),
             ): selector.BooleanSelector(),
             vol.Required(
                 CONF_SCHEDULE_ENABLED,
@@ -595,4 +607,3 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             }
         )
         return self.async_show_form(step_id="manual_zone", data_schema=schema)
-

@@ -61,6 +61,14 @@ Nel mio impianto domestico ho:
   * **Timer di Emergenza (Fallback):** Se non hai il sensore dei Watt (o se diventa `unavailable`), entra in funzione automaticamente il timer configurabile (es. `60 min`).
 * **Sicurezza Accensione Manuale (> Soglia W):**
   * Se il generatore di calore viene acceso manualmente dal comando fisico mentre i termostati sono spenti, non appena l'assorbimento elettrico supera la soglia (es. $\ge 10\text{ W}$) l'integrazione apre automaticamente la valvola di sicurezza designata.
+* **Controllo Esclusivo o Coesistenza Manuale (`Controllo Esclusivo Switch`):**
+  * **Disabilitato (Default – Edge-Triggered):** L'integrazione comanda gli switch solo quando cambia lo stato calcolato dal termostato o dalle sicurezze, lasciandoti libero di azionare manualmente uno switch da Home Assistant senza che venga subito sovrascritto.
+  * **Abilitato (`Controllo Esclusivo`):** L'integrazione assume il controllo totale degli switch fisici (generatore e valvole), **li nasconde automaticamente dalla UI di Home Assistant** per evitare tocchi involontari e annulla istantaneamente qualsiasi modifica manuale non conforme.
+* **Interruttore Generale `Impianto Abilitato` Sincronizzato coi Termostati:**
+  * Spegnendo `Impianto Abilitato`, tutti i termostati di zona vengono passati in modalità `OFF` (lasciando comunque attive le logiche di smaltimento calore residuo e sicurezza).
+  * Accendendolo, tutti i termostati tornano in modalità `HEAT`. Se accendi o spegni manualmente i singoli termostati, l'interruttore generale si aggiorna automaticamente di conseguenza.
+* **Tracciamento Nativo nel Registro Attività (Logbook & Context di Home Assistant):**
+  * Ogni azione eseguita dall'integrazione sugli switch o sui termostati registra un evento dettagliato nel **Registro Attività (Logbook)** di Home Assistant collegato al `Context` dell'evento scatenante, così puoi sempre leggere nella cronologia *chi* e *perché* ha acceso o spento uno switch (es. richiesta calore zona, smaltimento Watt/Timer, sicurezza accensione manuale o ripristino da Controllo Esclusivo).
 * **Sensore Problema & Fail-Safe (`binary_sensor`):**
   * Monitora costantemente la disponibilità di tutti i sensori di temperatura, del sensore di potenza e degli switch (valvole e generatore).
   * Se un sensore di temperatura sparisce, interrompe per sicurezza la richiesta di calore di quella zona e attiva il sensore diagnostico **Problema Impianto / Sensori**.
@@ -109,8 +117,9 @@ Tutte le entità si trovano raggruppate sotto **Impostazioni $\rightarrow$ Dispo
 | Sezione | Tipo Entità | Nome | Descrizione |
 | :--- | :--- | :--- | :--- |
 | **Controlli** | `climate` | `Termostato <Zona>` | Termostato nativo con modalità `Heat`/`Off` e preset **Giorno**, **Notte**, **Fuori Casa**. |
-| **Controlli** | `switch` | `Impianto Abilitato` | Interruttore generale (Master Switch) per abilitare/disabilitare il riscaldamento. |
+| **Controlli** | `switch` | `Impianto Abilitato` | Interruttore generale sincronizzato coi termostati: spegne (`Off`) o riattiva (`Heat`) tutti i termostati di zona. |
 | **Controlli** | `switch` | `Modalità Fuori Casa` | Imposta tutte le zone in modalità *Fuori Casa* con un solo clic. |
+| **Configurazione** | `switch` | `Controllo Esclusivo Switch` | Se attivo, nasconde gli switch fisici in HA e blocca qualsiasi modifica manuale agli switch di valvole e generatore. |
 | **Configurazione** | `select` | `Sensore Temperatura <Zona>` | Cambia al volo quale sensore di temperatura guida ciascuna zona. |
 | **Configurazione** | `switch` | `Cambio Orario Giorno/Notte` | Abilita/disabilita il passaggio automatico tra *Giorno* e *Notte*. |
 | **Configurazione** | `time` | `Orario Inizio Giorno` / `Notte` | Selettori orari per l'inizio della fascia Giorno e della fascia Notte. |
@@ -166,6 +175,13 @@ In my home heating system, I have:
   * **Fallback Timer:** If no power sensor is configured—or if the power sensor becomes `unavailable`—the integration automatically falls back to a configurable cooldown timer (e.g., `60 min`).
 * **Manual Ignition Safety (> Threshold W):**
   * If the heat generator is turned on manually from its physical control panel while all thermostats are idle, as soon as power consumption exceeds the safety threshold (e.g., $\ge 10\text{ W}$), the integration automatically opens the safety zone valve.
+* **Exclusive Control vs. Manual Coexistence (`Exclusive Control Switch`):**
+  * **Disabled (Default – Edge-Triggered):** The integration only sends `turn_on`/`turn_off` commands when its calculated target state changes, allowing manual switch toggles in between without immediately reverting them.
+  * **Enabled (`Exclusive Control`):** The integration enforces strict state control over all physical switches (heat generator and zone valves), **automatically hides those switches in the Home Assistant UI** to prevent accidental clicks, and immediately reverts any manual toggle that conflicts with the calculated state.
+* **Master Switch Synced with Zone Thermostats:**
+  * Turning `Impianto Abilitato` OFF sets all zone thermostats to `HVACMode.OFF` (while keeping residual heat dissipation and safety rules active). Turning it ON sets all zone thermostats back to `HVACMode.HEAT`.
+* **Native Home Assistant Logbook & Context Attribution:**
+  * Every switch or thermostat state change triggered by the integration records a clear entry in the Home Assistant **Activity / Logbook** panel linked via `Context`, showing the exact reason why the state changed (e.g., zone heat demand, Watt/Timer cooldown, manual ignition safety, or Exclusive Control revert).
 * **Problem Binary Sensor & Fail-Safe (`binary_sensor`):**
   * Continuously monitors availability of all temperature sensors, power sensor, and switches (zone valves and heat generator).
   * If a zone's temperature sensor becomes `unavailable`, that zone safely stops requesting heat and triggers the diagnostic **Problem** binary sensor (listing the offline entities in its attributes).

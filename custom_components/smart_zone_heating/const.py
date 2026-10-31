@@ -5,6 +5,7 @@ DOMAIN = "smart_zone_heating"
 CONF_SYSTEM_NAME = "system_name"
 CONF_HEATER_ENTITY = "heater_entity"
 CONF_MASTER_ENABLED = "master_enabled"
+CONF_EXCLUSIVE_CONTROL = "exclusive_control"
 CONF_ZONE_COUNT = "zone_count"
 CONF_ZONES = "zones"
 
@@ -72,4 +73,3 @@ STATE_COOLDOWN_TIMER = "Smaltimento calore (timer fallback)"
 STATE_MANUAL_SAFETY = "Sicurezza accensione manuale (> soglia W)"
 STATE_DISABLED = "Impianto disabilitato"
 STATE_PROBLEM = "Attenzione: sensori indisponibili"
-

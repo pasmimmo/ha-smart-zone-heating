@@ -47,10 +47,10 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     coordinator: SmartZoneHeatingCoordinator = hass.data[DOMAIN][entry.entry_id]
+    await coordinator.async_apply_exclusive_control_visibility(force_unhide=True)
     await coordinator.async_stop()
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok
-

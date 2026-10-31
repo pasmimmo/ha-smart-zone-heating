@@ -68,6 +68,8 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         """Restore previous target temperatures, preset mode, and HVAC mode on startup."""
         await super().async_added_to_hass()
+        self.zone.climate_entity_id = self.entity_id
+
         last_state = await self.async_get_last_state()
         if last_state is not None:
             if last_state.state in (HVACMode.HEAT, HVACMode.OFF):
@@ -121,7 +123,7 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
 
     @property
     def hvac_action(self) -> HVACAction:
-        if not self.zone.hvac_mode_enabled or not self.coordinator.master_enabled:
+        if not self.zone.hvac_mode_enabled:
             return HVACAction.OFF
         return HVACAction.HEATING if self.zone.requesting_heat else HVACAction.IDLE
 
@@ -148,16 +150,34 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
                 self.zone.temp_night = new_temp
             elif self.zone.preset_mode == PRESET_AWAY:
                 self.zone.temp_away = new_temp
+            self.coordinator._last_trigger_context = self._context
+            self.coordinator._fire_logbook_entry(
+                entity_id=self.entity_id,
+                message=f"Temperatura target di {self.zone.name} impostata a {new_temp:.1f}°C ({self.zone.preset_mode})",
+                context=self._context,
+            )
             await self.coordinator.async_evaluate()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode (day, night, away)."""
         if preset_mode in self._attr_preset_modes:
             self.zone.apply_preset(preset_mode)
+            self.coordinator._last_trigger_context = self._context
+            self.coordinator._fire_logbook_entry(
+                entity_id=self.entity_id,
+                message=f"Preset di {self.zone.name} impostato su '{preset_mode}' ({self.zone.target_temp:.1f}°C)",
+                context=self._context,
+            )
             await self.coordinator.async_evaluate()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""
         self.zone.hvac_mode_enabled = hvac_mode == HVACMode.HEAT
+        self.coordinator._last_trigger_context = self._context
+        mode_str = "Riscaldamento (HEAT)" if self.zone.hvac_mode_enabled else "Spento (OFF)"
+        self.coordinator._fire_logbook_entry(
+            entity_id=self.entity_id,
+            message=f"Termostato {self.zone.name} impostato su {mode_str}",
+            context=self._context,
+        )
         await self.coordinator.async_evaluate()
-

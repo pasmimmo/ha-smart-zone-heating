@@ -30,6 +30,7 @@
         "data": {
           "heater_entity": "Switch Generatore di Calore (contatto pulito / relè)",
           "master_enabled": "Interruttore generale Impianto Abilitato",
+          "exclusive_control": "Controllo Esclusivo (nasconde gli switch fisici e blocca le modifiche manuali)",
           "power_sensor": "Sensore di potenza del Generatore di Calore in Watt (opzionale)",
           "power_threshold_watt": "Soglia minima potenza (Watt) per smaltimento e accensione manuale",
           "power_grace_seconds": "Tempo di conferma / tolleranza iniziale (secondi)",
@@ -57,6 +58,7 @@
         "data": {
           "heater_entity": "Switch Generatore di Calore (contatto pulito / relè)",
           "master_enabled": "Interruttore generale Impianto Abilitato",
+          "exclusive_control": "Controllo Esclusivo (nasconde gli switch fisici e blocca le modifiche manuali)",
           "schedule_enabled": "Abilita cambio automatico per fascia oraria Giorno / Notte",
           "day_start_time": "Orario inizio modalità Giorno",
           "night_start_time": "Orario inizio modalità Notte",
