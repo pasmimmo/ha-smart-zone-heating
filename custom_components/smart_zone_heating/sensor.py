@@ -76,7 +76,7 @@ class CooldownRemainingSensor(SensorEntity):
     """Sensor showing remaining minutes of heat dissipation after heater turns off."""
 
     _attr_has_entity_name = True
-    _attr_name = "Minuti Residui Smaltimento"
+    _attr_name = "Timer Smaltimento"
     _attr_icon = "mdi:timer-outline"
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_entity_category = EntityCategory.DIAGNOSTIC

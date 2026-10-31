@@ -30,7 +30,7 @@ class SystemProblemBinarySensor(BinarySensorEntity):
     """Binary sensor that turns ON (Problem) when any configured sensor or switch is unavailable."""
 
     _attr_has_entity_name = True
-    _attr_name = "Problema Impianto / Sensori"
+    _attr_name = "Problema Sensori"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 

@@ -1,4 +1,4 @@
-"""Time entities in Controls box for Day and Night schedule hours (dynamically added/removed)."""
+"""Time entities in Controls box for Day and Night schedule hours (dynamically added/removed right below Giorno/Notte)."""
 from __future__ import annotations
 
 from datetime import time
@@ -63,10 +63,10 @@ async def async_setup_entry(
 
 
 class DayStartTimeEntity(TimeEntity):
-    """Time entity in Controls box for when Day mode starts (shown only when schedule_enabled is ON)."""
+    """Time entity in Controls box right below Giorno/Notte (shown only when schedule_enabled is ON)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Orario Inizio Giorno"
+    _attr_name = "Giorno/Notte: Ora Giorno"
     _attr_icon = "mdi:weather-sunny"
     _attr_entity_category = None
 
@@ -112,10 +112,10 @@ class DayStartTimeEntity(TimeEntity):
 
 
 class NightStartTimeEntity(TimeEntity):
-    """Time entity in Controls box for when Night mode starts (shown only when schedule_enabled is ON)."""
+    """Time entity in Controls box right below Giorno/Notte (shown only when schedule_enabled is ON)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Orario Inizio Notte"
+    _attr_name = "Giorno/Notte: Ora Notte"
     _attr_icon = "mdi:weather-night"
     _attr_entity_category = None
 

@@ -13,6 +13,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -58,7 +59,8 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
         self.zone_id = zone_id
         zone = self.zone
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{zone_id}_climate"
-        self._attr_name = f"Termostato {zone.name}"
+        # Leading non-breaking space sorts Thermostats first in the Controls box
+        self._attr_name = f"\u00a0Termostato {zone.name}"
         self._attr_device_info = coordinator.device_info
 
     @property
@@ -69,6 +71,12 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
         """Restore previous target temperatures, preset mode, and HVAC mode on startup."""
         await super().async_added_to_hass()
         self.zone.climate_entity_id = self.entity_id
+        ent_reg = er.async_get(self.hass)
+        if self.entity_id and ent_reg.async_get(self.entity_id):
+            ent_reg.async_update_entity(
+                self.entity_id,
+                original_name=self._attr_name,
+            )
 
         last_state = await self.async_get_last_state()
         if last_state is not None:

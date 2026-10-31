@@ -116,22 +116,19 @@ Tutte le entità si trovano raggruppate sotto **Impostazioni $\rightarrow$ Dispo
 
 | Sezione | Tipo Entità | Nome | Descrizione |
 | :--- | :--- | :--- | :--- |
-| **Controlli** | `climate` | `Termostato <Zona>` | Termostato nativo con modalità `Heat`/`Off` e preset **Giorno**, **Notte**, **Fuori Casa**. |
-| **Controlli** | `switch` | `Impianto Abilitato` | Interruttore generale sincronizzato coi termostati: spegne (`Off`) o riattiva (`Heat`) tutti i termostati di zona. |
-| **Controlli** | `switch` | `Modalità Fuori Casa` | Imposta tutte le zone in modalità *Fuori Casa* con un solo clic. |
-| **Configurazione** | `switch` | `Controllo Esclusivo Switch` | Se attivo, nasconde gli switch fisici in HA e blocca qualsiasi modifica manuale agli switch di valvole e generatore. |
-| **Configurazione** | `select` | `Sensore Temperatura <Zona>` | Cambia al volo quale sensore di temperatura guida ciascuna zona. |
-| **Configurazione** | `switch` | `Cambio Orario Giorno/Notte` | Abilita/disabilita il passaggio automatico tra *Giorno* e *Notte*. |
-| **Configurazione** | `time` | `Orario Inizio Giorno` / `Notte` | Selettori orari per l'inizio della fascia Giorno e della fascia Notte. |
-| **Configurazione** | `select` | `Valvola Smaltimento Calore` | Sceglie quale zona aprire durante lo smaltimento calore. |
-| **Configurazione** | `select` | `Valvola Sicurezza Accensione Manuale` | Sceglie quale zona aprire se la potenza supera la soglia W a impianto spento. |
-| **Configurazione** | `number` | `Soglia Consumo Sicurezza (W)` | Soglia in Watt sopra la quale il generatore è considerato attivo (default `10 W`). |
-| **Configurazione** | `number` | `Durata Smaltimento Calore (min)` | Durata in minuti del timer di fallback per lo smaltimento (default `60 min`). |
-| **Configurazione** | `number` | `Isteresi Termostati (°C)` | Tolleranza dei termostati di zona (default `0.3 °C`). |
-| **Configurazione** | `select` | `Servizio di Notifica` / `Livello Notifiche` | Scelta del servizio `notify.*` e del livello (`Off`, `Error`, `Warning`, `Debug`). |
-| **Diagnostica** | `binary_sensor` | `Problema Impianto / Sensori` | Si attiva (`Problema`) se un sensore o uno switch diventa `unavailable`, elencando negli attributi le entità offline. |
+| **Controlli** | `climate` | `Termostato <Zona>` | Termostato nativo (1ª voce) con modalità `Heat`/`Off` e preset **Giorno**, **Notte**, **Fuori Casa**. |
+| **Controlli** | `switch` | `Attiva Termostati` | Interruttore generale (2ª voce) sincronizzato coi termostati: spegne (`Off`) o riattiva (`Heat`) tutti i termostati di zona. |
+| **Controlli** | `switch` | `Fuori Casa` | Imposta tutte le zone in modalità *Fuori Casa* con un solo clic (3ª voce). |
+| **Controlli** | `switch` | `Giorno/Notte` | Abilita/disabilita il ciclo automatico orario *Giorno/Notte* (4ª voce). |
+| **Controlli** | `time` | `Giorno/Notte: Ora Giorno` / `Ora Notte` | Compaiono dinamicamente subito sotto `Giorno/Notte` solo quando il ciclo è attivo. |
+| **Configurazione** | `number` | `Isteresi` | Tolleranza dei termostati di zona in °C (1ª voce, default `0.3 °C`). |
+| **Configurazione** | `select` | `Sensore <Zona>` | Cambia al volo quale sensore di temperatura guida ciascuna zona (2ª voce). |
+| **Configurazione** | `select` | `Notifiche` / `Notifiche: Livello` | Scelta del servizio `notify.*` (3ª voce) e del livello (`Error`, `Warning`, `Debug`), che compare dinamicamente solo se le notifiche sono attive. |
+| **Diagnostica** | `binary_sensor` | `Problema Sensori` | Si attiva (`Problema`) se un sensore o uno switch diventa `unavailable`, elencando negli attributi le entità offline. |
 | **Diagnostica** | `sensor` | `Stato Sistema` | Mostra la fase corrente (*Inattivo*, *Riscaldamento*, *Smaltimento Watt/Timer*, *Sicurezza manuale*). |
-| **Diagnostica** | `sensor` | `Minuti Residui Smaltimento` | Conto alla rovescia in minuti del timer di smaltimento. |
+| **Diagnostica** | `sensor` | `Timer Smaltimento` | Conto alla rovescia in minuti del timer di smaltimento. |
+
+> **Nota:** I parametri strutturali e di sicurezza (*Controllo Esclusivo Switch*, *Durata Smaltimento Calore*, *Soglia Consumo Sicurezza W*, *Valvola Smaltimento Calore* e *Valvola Sicurezza Accensione Manuale*) sono gestibili dal menu a sezioni cliccando sull'icona dell'**ingranaggio (`Configura`)** dell'integrazione.
 
 ---
 ---
