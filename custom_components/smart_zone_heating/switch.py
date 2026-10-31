@@ -113,7 +113,7 @@ class ScheduleEnabledSwitch(SwitchEntity):
     """Switch under Configuration to enable/disable automatic Day/Night hourly schedule."""
 
     _attr_has_entity_name = True
-    _attr_name = "Cambio Orario Giorno/Notte"
+    _attr_name = "Termostati: Cambio Orario Giorno/Notte"
     _attr_icon = "mdi:calendar-clock"
     _attr_entity_category = EntityCategory.CONFIG
 
@@ -139,11 +139,12 @@ class ScheduleEnabledSwitch(SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         self.coordinator.schedule_enabled = True
         self.coordinator.persist_config_option(CONF_SCHEDULE_ENABLED, True)
+        self.coordinator.apply_dynamic_config_visibility()
         self.coordinator._last_scheduled_period = None
         self.coordinator._last_trigger_context = self._context
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
-            action_desc="-> on, cambio automatico Giorno/Notte attivo",
+            action_desc="-> on, cambio automatico Giorno/Notte attivo (orari visibili)",
             context=self._context,
         )
         await self.coordinator.async_evaluate()
@@ -151,10 +152,11 @@ class ScheduleEnabledSwitch(SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.coordinator.schedule_enabled = False
         self.coordinator.persist_config_option(CONF_SCHEDULE_ENABLED, False)
+        self.coordinator.apply_dynamic_config_visibility()
         self.coordinator._last_trigger_context = self._context
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
-            action_desc="-> off, cambio automatico Giorno/Notte disattivato",
+            action_desc="-> off, cambio automatico Giorno/Notte disattivato (orari nascosti)",
             context=self._context,
         )
         await self.coordinator.async_evaluate()
@@ -164,7 +166,7 @@ class ExclusiveControlSwitch(SwitchEntity):
     """Switch under Configuration to enforce exclusive control and hide physical switches."""
 
     _attr_has_entity_name = True
-    _attr_name = "Controllo Esclusivo Switch"
+    _attr_name = "Sicurezza: Controllo Esclusivo Switch"
     _attr_icon = "mdi:shield-lock-outline"
     _attr_entity_category = EntityCategory.CONFIG
 

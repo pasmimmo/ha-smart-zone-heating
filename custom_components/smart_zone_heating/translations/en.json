@@ -2,12 +2,19 @@
   "config": {
     "step": {
       "user": {
-        "title": "Step 1: Number of Zones & Day/Night Schedule",
-        "description": "Set the system name, how many thermal zones you have, and the hours for automatic Day / Night switching.",
+        "title": "Step 1: Thermostats & Zones Configuration",
+        "description": "Set the system name, number of thermal zones, thermostat hysteresis, and whether to enable automatic Day / Night switching.",
         "data": {
           "system_name": "System name",
           "zone_count": "How many thermal zones?",
-          "schedule_enabled": "Enable automatic Day / Night hourly schedule",
+          "hysteresis": "Thermostat Hysteresis (°C)",
+          "schedule_enabled": "Enable automatic Day / Night hourly schedule"
+        }
+      },
+      "schedule_hours": {
+        "title": "Step 1b: Day / Night Schedule Hours",
+        "description": "Configure the start times for Day mode and Night mode.",
+        "data": {
           "day_start_time": "Day mode start time",
           "night_start_time": "Night mode start time"
         }
@@ -25,7 +32,7 @@
         }
       },
       "heater_and_safety": {
-        "title": "Step 3: Heat Generator, Safety (Watt + Timer Fallback) & Notifications",
+        "title": "Step 3: Heat Generator, Safety & Notifications",
         "description": "When a power sensor (Watts) is configured for the heat generator, it decides when to close the cooldown valve (below threshold W), using the timer as a fallback if the sensor becomes unavailable.",
         "data": {
           "heater_entity": "Heat Generator switch (dry-contact / relay)",
@@ -53,23 +60,43 @@
   "options": {
     "step": {
       "init": {
-        "title": "Heat Generator, Safety & Notification Settings",
-        "description": "Update heat generator switch, Day/Night hours, Watt cooldown / fallback timer, and notifications.",
+        "title": "Smart Zone Heating Configuration",
+        "description": "Choose which configuration section to edit:",
+        "menu_options": {
+          "thermostats": "1. Thermostats & Day/Night Schedule",
+          "safety": "2. Heat Generator, Exclusive Control & Safety",
+          "notifications": "3. Notifications & Debug Level"
+        }
+      },
+      "thermostats": {
+        "title": "Thermostats & Schedule Settings",
+        "description": "Configure thermostat hysteresis and automatic Day / Night schedule switching (if enabled, you will configure the start hours in the next step).",
+        "data": {
+          "hysteresis": "Thermostat Hysteresis (°C)",
+          "schedule_enabled": "Enable automatic Day / Night hourly schedule"
+        }
+      },
+      "schedule_hours": {
+        "title": "Day / Night Schedule Hours",
+        "description": "Configure the start times for Day mode and Night mode.",
+        "data": {
+          "day_start_time": "Day mode start time",
+          "night_start_time": "Night mode start time"
+        }
+      },
+      "safety": {
+        "title": "Heat Generator, Exclusive Control & Safety",
+        "description": "Configure heat generator switch, Exclusive Control over physical switches, and cooldown / manual ignition safety settings.",
         "data": {
           "heater_entity": "Heat Generator switch (dry-contact / relay)",
           "master_enabled": "Master switch System Enabled",
           "exclusive_control": "Exclusive Control (hides physical switches and reverts manual toggles)",
-          "schedule_enabled": "Enable automatic Day / Night hourly schedule",
-          "day_start_time": "Day mode start time",
-          "night_start_time": "Night mode start time",
           "power_sensor": "Heat Generator power sensor in Watts (optional)",
           "power_threshold_watt": "Minimum power threshold (Watts) for cooldown & manual ignition",
           "power_grace_seconds": "Initial confirmation / grace time (seconds)",
           "cooldown_minutes": "Fallback heat dissipation timer (minutes, used if power sensor is unavailable)",
           "cooldown_zone_id": "Zone valve to open for heat dissipation / safety",
-          "use_separate_manual_zone": "Use another valve for manual ignition",
-          "notify_service": "Optional notification service (e.g. notify.mobile_app_...)",
-          "notify_level": "Notification level (Off / Error / Warning / Debug)"
+          "use_separate_manual_zone": "Use another valve for manual ignition"
         }
       },
       "manual_zone": {
@@ -77,6 +104,14 @@
         "description": "Select which zone valve to open when heat generator power consumption exceeds the threshold while idle.",
         "data": {
           "manual_safety_zone_id": "Zone valve to open on manual ignition (> threshold W)"
+        }
+      },
+      "notifications": {
+        "title": "Notification & Debug Settings",
+        "description": "Select notification service and verbosity level.",
+        "data": {
+          "notify_service": "Notification service (e.g. notify.mobile_app_... or notify.persistent_notification)",
+          "notify_level": "Notification level (Off / Error / Warning / Debug)"
         }
       }
     }
@@ -107,4 +142,3 @@
     }
   }
 }
-

@@ -2,12 +2,19 @@
   "config": {
     "step": {
       "user": {
-        "title": "Passo 1: Numero di Zone e Orari Giorno/Notte",
-        "description": "Imposta il nome dell'impianto, quante zone termiche hai e gli orari per il cambio automatico Giorno / Notte.",
+        "title": "Passo 1: Configurazione Termostati e Zone",
+        "description": "Imposta il nome dell'impianto, quante zone termiche hai, l'isteresi dei termostati e se abilitare il cambio automatico per fascia oraria Giorno / Notte.",
         "data": {
           "system_name": "Nome dell'impianto",
           "zone_count": "Quante zone termiche vuoi configurare?",
-          "schedule_enabled": "Abilita cambio automatico per fascia oraria Giorno / Notte",
+          "hysteresis": "Isteresi Termostati (°C)",
+          "schedule_enabled": "Abilita cambio automatico per fascia oraria Giorno / Notte"
+        }
+      },
+      "schedule_hours": {
+        "title": "Passo 1b: Orari Fascia Giorno / Notte",
+        "description": "Imposta gli orari di inizio per la modalità Giorno e la modalità Notte.",
+        "data": {
           "day_start_time": "Orario inizio modalità Giorno",
           "night_start_time": "Orario inizio modalità Notte"
         }
@@ -36,7 +43,7 @@
           "power_grace_seconds": "Tempo di conferma / tolleranza iniziale (secondi)",
           "cooldown_minutes": "Timer di fallback smaltimento calore (minuti, usato se manca il sensore Watt)",
           "cooldown_zone_id": "Valvola di zona da aprire per smaltimento calore / sicurezza",
-          "use_separate_manual_zone": "Usa un'altra valvola per l'accensione manuale (Use another for manual)",
+          "use_separate_manual_zone": "Usa un'altra valvola per l'accensione manuale",
           "notify_service": "Servizio di notifica opzionale (es. notify.mobile_app_...)",
           "notify_level": "Livello notifiche (Off / Error / Warning / Debug)"
         }
@@ -53,23 +60,43 @@
   "options": {
     "step": {
       "init": {
-        "title": "Configurazione Generatore di Calore, Sicurezza e Notifiche",
-        "description": "Modifica switch del generatore di calore, orari Giorno/Notte, controllo Watt / timer di fallback e notifiche.",
+        "title": "Configurazione Smart Zone Heating",
+        "description": "Scegli l'ambito di configurazione da modificare:",
+        "menu_options": {
+          "thermostats": "1. Configurazione Termostati e Orari Giorno/Notte",
+          "safety": "2. Generatore di Calore, Controllo Esclusivo e Sicurezze",
+          "notifications": "3. Notifiche e Livello Debug"
+        }
+      },
+      "thermostats": {
+        "title": "Configurazione Termostati e Programmazione",
+        "description": "Imposta l'isteresi dei termostati e l'attivazione del cambio orario Giorno / Notte (se attivo, nel passo successivo potrai scegliere gli orari).",
+        "data": {
+          "hysteresis": "Isteresi Termostati (°C)",
+          "schedule_enabled": "Abilita cambio automatico per fascia oraria Giorno / Notte"
+        }
+      },
+      "schedule_hours": {
+        "title": "Orari Fascia Giorno / Notte",
+        "description": "Imposta gli orari di inizio per la modalità Giorno e la modalità Notte.",
+        "data": {
+          "day_start_time": "Orario inizio modalità Giorno",
+          "night_start_time": "Orario inizio modalità Notte"
+        }
+      },
+      "safety": {
+        "title": "Generatore di Calore, Controllo Esclusivo e Sicurezze",
+        "description": "Configura lo switch del generatore, il Controllo Esclusivo sugli switch fisici e i parametri di smaltimento calore (Watt + Timer fallback) e accensione manuale.",
         "data": {
           "heater_entity": "Switch Generatore di Calore (contatto pulito / relè)",
           "master_enabled": "Interruttore generale Impianto Abilitato",
           "exclusive_control": "Controllo Esclusivo (nasconde gli switch fisici e blocca le modifiche manuali)",
-          "schedule_enabled": "Abilita cambio automatico per fascia oraria Giorno / Notte",
-          "day_start_time": "Orario inizio modalità Giorno",
-          "night_start_time": "Orario inizio modalità Notte",
           "power_sensor": "Sensore di potenza del Generatore di Calore in Watt (opzionale)",
           "power_threshold_watt": "Soglia minima potenza (Watt) per smaltimento e accensione manuale",
           "power_grace_seconds": "Tempo di conferma / tolleranza iniziale (secondi)",
           "cooldown_minutes": "Timer di fallback smaltimento calore (minuti, usato se manca il sensore Watt)",
           "cooldown_zone_id": "Valvola di zona da aprire per smaltimento calore / sicurezza",
-          "use_separate_manual_zone": "Usa un'altra valvola per l'accensione manuale (Use another for manual)",
-          "notify_service": "Servizio di notifica opzionale (es. notify.mobile_app_...)",
-          "notify_level": "Livello notifiche (Off / Error / Warning / Debug)"
+          "use_separate_manual_zone": "Usa un'altra valvola per l'accensione manuale"
         }
       },
       "manual_zone": {
@@ -77,6 +104,14 @@
         "description": "Scegli quale valvola aprire quando l'assorbimento del generatore supera la soglia in Watt a impianto spento.",
         "data": {
           "manual_safety_zone_id": "Valvola di zona da aprire in caso di accensione manuale (> soglia W)"
+        }
+      },
+      "notifications": {
+        "title": "Configurazione Notifiche e Debug",
+        "description": "Scegli il servizio di notifica e il livello di dettaglio dei messaggi inviati dall'integrazione.",
+        "data": {
+          "notify_service": "Servizio di notifica (es. notify.mobile_app_... o notify.persistent_notification)",
+          "notify_level": "Livello notifiche (Off / Error / Warning / Debug)"
         }
       }
     }
@@ -107,4 +142,3 @@
     }
   }
 }
-

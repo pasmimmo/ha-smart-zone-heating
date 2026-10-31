@@ -52,7 +52,7 @@ class ZoneTempSensorSelect(SelectEntity):
         self.coordinator = coordinator
         self.zone_id = zone_id
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{zone_id}_temp_sensor_select"
-        self._attr_name = f"Sensore Temperatura {self.zone.name}"
+        self._attr_name = f"Termostati: Sensore {self.zone.name}"
         self._attr_device_info = coordinator.device_info
 
     @property
@@ -103,7 +103,7 @@ class CooldownZoneSelect(SelectEntity):
     """Select which zone valve stays open during heat dissipation (cooldown)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Valvola Smaltimento Calore"
+    _attr_name = "Sicurezza: Valvola Smaltimento Calore"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:valve-open"
 
@@ -149,7 +149,7 @@ class ManualSafetyZoneSelect(SelectEntity):
     """Select which zone valve opens when manual ignition / power consumption > threshold W is detected."""
 
     _attr_has_entity_name = True
-    _attr_name = "Valvola Sicurezza Accensione Manuale"
+    _attr_name = "Sicurezza: Valvola Accensione Manuale"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:shield-alert-outline"
 
@@ -201,7 +201,7 @@ class NotifyServiceSelect(SelectEntity):
     """Select entity to pick the notification service (notify.*) on the Device Page."""
 
     _attr_has_entity_name = True
-    _attr_name = "Servizio di Notifica"
+    _attr_name = "Notifiche: 1. Servizio"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:cellphone-message"
 
@@ -238,6 +238,7 @@ class NotifyServiceSelect(SelectEntity):
         old_svc = self.current_option
         self.coordinator.notify_service = None if option == "none" else option
         self.coordinator.persist_config_option(CONF_NOTIFY_SERVICE, option)
+        self.coordinator.apply_dynamic_config_visibility()
         self._handle_coordinator_update()
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
@@ -250,7 +251,7 @@ class NotifyLevelSelect(SelectEntity):
     """Select entity to configure notification verbosity (off / error / warning / debug)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Livello Notifiche"
+    _attr_name = "Notifiche: 2. Livello"
     _attr_translation_key = "notify_level"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:bell-cog-outline"

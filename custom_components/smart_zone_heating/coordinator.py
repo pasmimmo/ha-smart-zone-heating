@@ -1,4 +1,4 @@
-"""Coordinator for Smart Zone Heating (Exclusive Control + Master Thermostat Sync + Unified SZH Logbook/Debug)."""
+"""Coordinator for Smart Zone Heating (Exclusive Control + Dynamic Visibility + Unified SZH Logbook/Debug)."""
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
@@ -262,6 +262,45 @@ class SmartZoneHeatingCoordinator:
             self._updating_from_entity = False
 
     @callback
+    def _set_entity_hidden_by_unique_id(self, unique_id: str, should_hide: bool) -> None:
+        """Hide or unhide one of our own config entities by its unique_id."""
+        ent_reg = er.async_get(self.hass)
+        entity_id = ent_reg.async_get_entity_id("time", DOMAIN, unique_id) or ent_reg.async_get_entity_id(
+            "select", DOMAIN, unique_id
+        ) or ent_reg.async_get_entity_id("number", DOMAIN, unique_id)
+        if not entity_id:
+            return
+        reg_entry = ent_reg.async_get(entity_id)
+        if reg_entry is None:
+            return
+        if should_hide:
+            if reg_entry.hidden_by is None:
+                ent_reg.async_update_entity(
+                    entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION
+                )
+        else:
+            if reg_entry.hidden_by == er.RegistryEntryHider.INTEGRATION:
+                ent_reg.async_update_entity(entity_id, hidden_by=None)
+
+    @callback
+    def apply_dynamic_config_visibility(self) -> None:
+        """Dynamically show/hide child configuration entities based on parent toggle states."""
+        # 1. Day/Night start time entities: visible only when schedule_enabled is True
+        hide_schedule_times = not self.schedule_enabled
+        self._set_entity_hidden_by_unique_id(
+            f"{self.entry.entry_id}_day_start_time", hide_schedule_times
+        )
+        self._set_entity_hidden_by_unique_id(
+            f"{self.entry.entry_id}_night_start_time", hide_schedule_times
+        )
+
+        # 2. Notify Level selector: visible only when notify_service is selected (not None)
+        hide_notify_level = not bool(self.notify_service)
+        self._set_entity_hidden_by_unique_id(
+            f"{self.entry.entry_id}_notify_level_select", hide_notify_level
+        )
+
+    @callback
     def apply_exclusive_control_visibility(self, force_unhide: bool = False) -> None:
         """Hide or unhide managed physical switch entities in Entity Registry based on exclusive_control."""
         ent_reg = er.async_get(self.hass)
@@ -289,14 +328,20 @@ class SmartZoneHeatingCoordinator:
         message: str,
         context: Context | None = None,
     ) -> Context:
-        """Create a linked Context and fire a Home Assistant logbook_entry event with 'SZH Integration:'."""
+        """Create a linked Context and fire a Home Assistant logbook_entry event with 'SZH Integration:' in message."""
         action_context = Context(
             user_id=context.user_id if context else None,
             parent_id=context.id if context else None,
         )
+        # Always include 'SZH Integration:' in message because HA hides 'name' when viewing a single entity's history
+        prefixed_msg = (
+            message
+            if message.startswith(LOGBOOK_NAME)
+            else f"{LOGBOOK_NAME}: {message}"
+        )
         log_data: dict[str, Any] = {
             "name": LOGBOOK_NAME,
-            "message": message,
+            "message": prefixed_msg,
             "domain": DOMAIN,
         }
         if entity_id:
@@ -330,7 +375,7 @@ class SmartZoneHeatingCoordinator:
             NOTIFY_LEVEL_WARNING: "⚠️ [WARN]",
             NOTIFY_LEVEL_DEBUG: "ℹ️ [DEBUG]",
         }.get(event_level, "")
-        title = f"{prefix} {LOGBOOK_NAME} ({self.system_name})".strip()
+        title = f"{prefix} {LOGBOOK_NAME}".strip()
 
         svc = self.notify_service
         if not svc:
@@ -463,8 +508,9 @@ class SmartZoneHeatingCoordinator:
             listener()
 
     async def async_start(self) -> None:
-        """Start tracking entities, apply exclusive control visibility, and evaluate initial state."""
+        """Start tracking entities, apply exclusive control & dynamic visibility, and evaluate initial state."""
         self.apply_exclusive_control_visibility()
+        self.apply_dynamic_config_visibility()
         self._resubscribe_listeners()
         self._unsub_periodic_tick = async_track_time_interval(
             self.hass,

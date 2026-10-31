@@ -38,6 +38,7 @@ from .const import (
     CONF_ZONES,
     DEFAULT_COOLDOWN_MINUTES,
     DEFAULT_DAY_START_TIME,
+    DEFAULT_HYSTERESIS,
     DEFAULT_NIGHT_START_TIME,
     DEFAULT_NOTIFY_LEVEL,
     DEFAULT_POWER_GRACE_SECONDS,
@@ -51,6 +52,7 @@ from .const import (
     NOTIFY_LEVEL_OFF,
     NOTIFY_LEVEL_WARNING,
 )
+from .coordinator import CONF_HYSTERESIS
 
 
 def _get_notify_service_options(hass: HomeAssistant) -> list[selector.SelectOptionDict]:
@@ -77,7 +79,7 @@ def _get_notify_level_options() -> list[selector.SelectOptionDict]:
         ),
         selector.SelectOptionDict(
             value=NOTIFY_LEVEL_DEBUG,
-            label="Debug (Tutti gli eventi: aperture valvole, generatore, cambio orario)",
+            label="Debug (Tutti gli eventi: aperture valvole, generatore, configurazione)",
         ),
     ]
 
@@ -97,24 +99,26 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Step 1: System name, number of zones/floors, and Day/Night schedule hours."""
+        """Step 1: System name, number of zones/floors, hysteresis, and schedule toggle."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             self._data[CONF_SYSTEM_NAME] = user_input[CONF_SYSTEM_NAME]
             self._zone_count = int(user_input[CONF_ZONE_COUNT])
             self._data[CONF_ZONE_COUNT] = self._zone_count
-            self._data[CONF_SCHEDULE_ENABLED] = bool(
-                user_input.get(CONF_SCHEDULE_ENABLED, True)
+            self._data[CONF_HYSTERESIS] = float(
+                user_input.get(CONF_HYSTERESIS, DEFAULT_HYSTERESIS)
             )
-            self._data[CONF_DAY_START_TIME] = user_input.get(
-                CONF_DAY_START_TIME, DEFAULT_DAY_START_TIME
-            )
-            self._data[CONF_NIGHT_START_TIME] = user_input.get(
-                CONF_NIGHT_START_TIME, DEFAULT_NIGHT_START_TIME
-            )
+            schedule_on = bool(user_input.get(CONF_SCHEDULE_ENABLED, True))
+            self._data[CONF_SCHEDULE_ENABLED] = schedule_on
             self._zones = []
             self._current_zone_idx = 0
+
+            if schedule_on:
+                return await self.async_step_schedule_hours()
+
+            self._data[CONF_DAY_START_TIME] = DEFAULT_DAY_START_TIME
+            self._data[CONF_NIGHT_START_TIME] = DEFAULT_NIGHT_START_TIME
             return await self.async_step_zone()
 
         schema = vol.Schema(
@@ -125,13 +129,16 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         min=1, max=10, step=1, mode=selector.NumberSelectorMode.BOX
                     )
                 ),
+                vol.Required(CONF_HYSTERESIS, default=DEFAULT_HYSTERESIS): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.1,
+                        max=2.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
                 vol.Required(CONF_SCHEDULE_ENABLED, default=True): selector.BooleanSelector(),
-                vol.Required(
-                    CONF_DAY_START_TIME, default=DEFAULT_DAY_START_TIME
-                ): selector.TimeSelector(),
-                vol.Required(
-                    CONF_NIGHT_START_TIME, default=DEFAULT_NIGHT_START_TIME
-                ): selector.TimeSelector(),
             }
         )
 
@@ -140,6 +147,31 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=schema,
             errors=errors,
         )
+
+    async def async_step_schedule_hours(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Step 1b (only if schedule_enabled is True): Day and Night start hours."""
+        if user_input is not None:
+            self._data[CONF_DAY_START_TIME] = user_input.get(
+                CONF_DAY_START_TIME, DEFAULT_DAY_START_TIME
+            )
+            self._data[CONF_NIGHT_START_TIME] = user_input.get(
+                CONF_NIGHT_START_TIME, DEFAULT_NIGHT_START_TIME
+            )
+            return await self.async_step_zone()
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_DAY_START_TIME, default=DEFAULT_DAY_START_TIME
+                ): selector.TimeSelector(),
+                vol.Required(
+                    CONF_NIGHT_START_TIME, default=DEFAULT_NIGHT_START_TIME
+                ): selector.TimeSelector(),
+            }
+        )
+        return self.async_show_form(step_id="schedule_hours", data_schema=schema)
 
     async def async_step_zone(
         self, user_input: dict[str, Any] | None = None
@@ -261,7 +293,6 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if use_separate:
                 return await self.async_step_manual_zone()
 
-            # Default: use the exact same zone valve for manual ignition safety as for cooldown
             self._data[CONF_MANUAL_SAFETY_ZONE_ID] = cooldown_zone_id
             return self.async_create_entry(
                 title=self._data[CONF_SYSTEM_NAME],
@@ -400,7 +431,7 @@ class SmartZoneHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow to change heater, exclusive control, schedule, cooldown, and notifications."""
+    """Structured Options Flow divided into clear sections by domain."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
@@ -410,7 +441,87 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Manage heater, exclusive control, schedule, cooldown, power sensor, and notifier options."""
+        """Show structured configuration menu by area."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["thermostats", "safety", "notifications"],
+        )
+
+    async def async_step_thermostats(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Section 1: Thermostats (Hysteresis & Day/Night Schedule toggle)."""
+        data = {**self._entry.data, **self._entry.options}
+
+        if user_input is not None:
+            new_options = dict(self._entry.options)
+            new_options[CONF_HYSTERESIS] = float(
+                user_input.get(CONF_HYSTERESIS, DEFAULT_HYSTERESIS)
+            )
+            schedule_on = bool(user_input.get(CONF_SCHEDULE_ENABLED, True))
+            new_options[CONF_SCHEDULE_ENABLED] = schedule_on
+            self._pending_options = new_options
+
+            if schedule_on:
+                return await self.async_step_schedule_hours()
+
+            return self.async_create_entry(title="", data=new_options)
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_HYSTERESIS,
+                    default=data.get(CONF_HYSTERESIS, DEFAULT_HYSTERESIS),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.1,
+                        max=2.0,
+                        step=0.1,
+                        unit_of_measurement="°C",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required(
+                    CONF_SCHEDULE_ENABLED,
+                    default=data.get(CONF_SCHEDULE_ENABLED, True),
+                ): selector.BooleanSelector(),
+            }
+        )
+        return self.async_show_form(step_id="thermostats", data_schema=schema)
+
+    async def async_step_schedule_hours(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Section 1b (shown only when schedule_enabled is ON): Day and Night start hours."""
+        data = {**self._entry.data, **self._entry.options}
+
+        if user_input is not None:
+            self._pending_options[CONF_DAY_START_TIME] = user_input.get(
+                CONF_DAY_START_TIME, DEFAULT_DAY_START_TIME
+            )
+            self._pending_options[CONF_NIGHT_START_TIME] = user_input.get(
+                CONF_NIGHT_START_TIME, DEFAULT_NIGHT_START_TIME
+            )
+            return self.async_create_entry(title="", data=self._pending_options)
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_DAY_START_TIME,
+                    default=data.get(CONF_DAY_START_TIME, DEFAULT_DAY_START_TIME),
+                ): selector.TimeSelector(),
+                vol.Required(
+                    CONF_NIGHT_START_TIME,
+                    default=data.get(CONF_NIGHT_START_TIME, DEFAULT_NIGHT_START_TIME),
+                ): selector.TimeSelector(),
+            }
+        )
+        return self.async_show_form(step_id="schedule_hours", data_schema=schema)
+
+    async def async_step_safety(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Section 2: Heat Generator, Exclusive Control, Cooldown & Manual Ignition Safety."""
         data = {**self._entry.data, **self._entry.options}
         zones = data.get(CONF_ZONES, [])
 
@@ -420,15 +531,6 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             new_options[CONF_MASTER_ENABLED] = bool(user_input.get(CONF_MASTER_ENABLED, True))
             new_options[CONF_EXCLUSIVE_CONTROL] = bool(
                 user_input.get(CONF_EXCLUSIVE_CONTROL, False)
-            )
-            new_options[CONF_SCHEDULE_ENABLED] = bool(
-                user_input.get(CONF_SCHEDULE_ENABLED, True)
-            )
-            new_options[CONF_DAY_START_TIME] = user_input.get(
-                CONF_DAY_START_TIME, DEFAULT_DAY_START_TIME
-            )
-            new_options[CONF_NIGHT_START_TIME] = user_input.get(
-                CONF_NIGHT_START_TIME, DEFAULT_NIGHT_START_TIME
             )
             new_options[CONF_COOLDOWN_MINUTES] = int(
                 user_input.get(CONF_COOLDOWN_MINUTES, DEFAULT_COOLDOWN_MINUTES)
@@ -441,13 +543,6 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             )
             new_options[CONF_POWER_GRACE_SECONDS] = int(
                 user_input.get(CONF_POWER_GRACE_SECONDS, DEFAULT_POWER_GRACE_SECONDS)
-            )
-            notify_svc = user_input.get(CONF_NOTIFY_SERVICE)
-            new_options[CONF_NOTIFY_SERVICE] = (
-                None if not notify_svc or notify_svc == "none" else notify_svc
-            )
-            new_options[CONF_NOTIFY_LEVEL] = user_input.get(
-                CONF_NOTIFY_LEVEL, DEFAULT_NOTIFY_LEVEL
             )
             use_separate = bool(user_input.get(CONF_USE_SEPARATE_MANUAL_ZONE, False))
             new_options[CONF_USE_SEPARATE_MANUAL_ZONE] = use_separate
@@ -464,114 +559,81 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             for z in zones
         ]
         default_zone_id = zones[0][CONF_ZONE_ID] if zones else ""
-        notify_options = _get_notify_service_options(self.hass)
-        level_options = _get_notify_level_options()
-        current_notify = data.get(CONF_NOTIFY_SERVICE) or "none"
 
-        schema_dict: dict[Any, Any] = {
-            vol.Required(
-                CONF_HEATER_ENTITY,
-                default=data.get(CONF_HEATER_ENTITY),
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
-            ),
-            vol.Required(
-                CONF_MASTER_ENABLED,
-                default=data.get(CONF_MASTER_ENABLED, True),
-            ): selector.BooleanSelector(),
-            vol.Required(
-                CONF_EXCLUSIVE_CONTROL,
-                default=data.get(CONF_EXCLUSIVE_CONTROL, False),
-            ): selector.BooleanSelector(),
-            vol.Required(
-                CONF_SCHEDULE_ENABLED,
-                default=data.get(CONF_SCHEDULE_ENABLED, True),
-            ): selector.BooleanSelector(),
-            vol.Required(
-                CONF_DAY_START_TIME,
-                default=data.get(CONF_DAY_START_TIME, DEFAULT_DAY_START_TIME),
-            ): selector.TimeSelector(),
-            vol.Required(
-                CONF_NIGHT_START_TIME,
-                default=data.get(CONF_NIGHT_START_TIME, DEFAULT_NIGHT_START_TIME),
-            ): selector.TimeSelector(),
-            vol.Optional(
-                CONF_POWER_SENSOR,
-                description={"suggested_value": data.get(CONF_POWER_SENSOR)},
-            ): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["sensor", "input_number"])
-            ),
-            vol.Required(
-                CONF_POWER_THRESHOLD_WATT,
-                default=data.get(CONF_POWER_THRESHOLD_WATT, DEFAULT_POWER_THRESHOLD_WATT),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=1.0,
-                    max=1000.0,
-                    step=1.0,
-                    unit_of_measurement="W",
-                    mode=selector.NumberSelectorMode.BOX,
-                )
-            ),
-            vol.Required(
-                CONF_POWER_GRACE_SECONDS,
-                default=data.get(CONF_POWER_GRACE_SECONDS, DEFAULT_POWER_GRACE_SECONDS),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0,
-                    max=600,
-                    step=5,
-                    unit_of_measurement="s",
-                    mode=selector.NumberSelectorMode.BOX,
-                )
-            ),
-            vol.Required(
-                CONF_COOLDOWN_MINUTES,
-                default=data.get(CONF_COOLDOWN_MINUTES, DEFAULT_COOLDOWN_MINUTES),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=0,
-                    max=240,
-                    step=5,
-                    unit_of_measurement="min",
-                    mode=selector.NumberSelectorMode.BOX,
-                )
-            ),
-            vol.Required(
-                CONF_COOLDOWN_ZONE_ID,
-                default=data.get(CONF_COOLDOWN_ZONE_ID, default_zone_id),
-            ): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=zone_options,
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                )
-            ),
-            vol.Required(
-                CONF_USE_SEPARATE_MANUAL_ZONE,
-                default=data.get(CONF_USE_SEPARATE_MANUAL_ZONE, False),
-            ): selector.BooleanSelector(),
-            vol.Required(
-                CONF_NOTIFY_SERVICE,
-                default=current_notify,
-            ): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=notify_options,
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                    custom_value=True,
-                )
-            ),
-            vol.Required(
-                CONF_NOTIFY_LEVEL,
-                default=data.get(CONF_NOTIFY_LEVEL, DEFAULT_NOTIFY_LEVEL),
-            ): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=level_options,
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                )
-            ),
-        }
-
-        return self.async_show_form(step_id="init", data_schema=vol.Schema(schema_dict))
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_HEATER_ENTITY,
+                    default=data.get(CONF_HEATER_ENTITY),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["switch", "input_boolean"])
+                ),
+                vol.Required(
+                    CONF_MASTER_ENABLED,
+                    default=data.get(CONF_MASTER_ENABLED, True),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_EXCLUSIVE_CONTROL,
+                    default=data.get(CONF_EXCLUSIVE_CONTROL, False),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    CONF_POWER_SENSOR,
+                    description={"suggested_value": data.get(CONF_POWER_SENSOR)},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "input_number"])
+                ),
+                vol.Required(
+                    CONF_POWER_THRESHOLD_WATT,
+                    default=data.get(CONF_POWER_THRESHOLD_WATT, DEFAULT_POWER_THRESHOLD_WATT),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1.0,
+                        max=1000.0,
+                        step=1.0,
+                        unit_of_measurement="W",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required(
+                    CONF_POWER_GRACE_SECONDS,
+                    default=data.get(CONF_POWER_GRACE_SECONDS, DEFAULT_POWER_GRACE_SECONDS),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0,
+                        max=600,
+                        step=5,
+                        unit_of_measurement="s",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required(
+                    CONF_COOLDOWN_MINUTES,
+                    default=data.get(CONF_COOLDOWN_MINUTES, DEFAULT_COOLDOWN_MINUTES),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0,
+                        max=240,
+                        step=5,
+                        unit_of_measurement="min",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required(
+                    CONF_COOLDOWN_ZONE_ID,
+                    default=data.get(CONF_COOLDOWN_ZONE_ID, default_zone_id),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=zone_options,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
+                    CONF_USE_SEPARATE_MANUAL_ZONE,
+                    default=data.get(CONF_USE_SEPARATE_MANUAL_ZONE, False),
+                ): selector.BooleanSelector(),
+            }
+        )
+        return self.async_show_form(step_id="safety", data_schema=schema)
 
     async def async_step_manual_zone(
         self, user_input: dict[str, Any] | None = None
@@ -607,3 +669,49 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             }
         )
         return self.async_show_form(step_id="manual_zone", data_schema=schema)
+
+    async def async_step_notifications(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Section 3: Notification service & verbosity level."""
+        data = {**self._entry.data, **self._entry.options}
+
+        if user_input is not None:
+            new_options = dict(self._entry.options)
+            notify_svc = user_input.get(CONF_NOTIFY_SERVICE)
+            new_options[CONF_NOTIFY_SERVICE] = (
+                None if not notify_svc or notify_svc == "none" else notify_svc
+            )
+            new_options[CONF_NOTIFY_LEVEL] = user_input.get(
+                CONF_NOTIFY_LEVEL, DEFAULT_NOTIFY_LEVEL
+            )
+            return self.async_create_entry(title="", data=new_options)
+
+        notify_options = _get_notify_service_options(self.hass)
+        level_options = _get_notify_level_options()
+        current_notify = data.get(CONF_NOTIFY_SERVICE) or "none"
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_NOTIFY_SERVICE,
+                    default=current_notify,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=notify_options,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                        custom_value=True,
+                    )
+                ),
+                vol.Required(
+                    CONF_NOTIFY_LEVEL,
+                    default=data.get(CONF_NOTIFY_LEVEL, DEFAULT_NOTIFY_LEVEL),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=level_options,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(step_id="notifications", data_schema=schema)

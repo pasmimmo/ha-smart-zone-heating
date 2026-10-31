@@ -31,7 +31,7 @@ class HysteresisNumber(NumberEntity):
     """Number entity to configure thermostat hysteresis."""
 
     _attr_has_entity_name = True
-    _attr_name = "Isteresi Termostati"
+    _attr_name = "Termostati: Isteresi"
     _attr_icon = "mdi:thermometer-lines"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_native_min_value = 0.1
@@ -76,7 +76,7 @@ class CooldownMinutesNumber(NumberEntity):
     """Number entity to configure heat dissipation duration in minutes."""
 
     _attr_has_entity_name = True
-    _attr_name = "Durata Smaltimento Calore"
+    _attr_name = "Sicurezza: Durata Smaltimento Calore"
     _attr_icon = "mdi:timer-sand"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_native_min_value = 0
@@ -123,7 +123,7 @@ class PowerThresholdNumber(NumberEntity):
     """Number entity to configure minimum power threshold in Watts for manual ignition safety."""
 
     _attr_has_entity_name = True
-    _attr_name = "Soglia Consumo Sicurezza"
+    _attr_name = "Sicurezza: Soglia Consumo"
     _attr_icon = "mdi:flash-alert"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_native_min_value = 1.0

@@ -29,10 +29,10 @@ async def async_setup_entry(
 
 
 class DayStartTimeEntity(TimeEntity):
-    """Time entity for when Day mode starts."""
+    """Time entity for when Day mode starts (shown only when schedule_enabled is ON)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Orario Inizio Giorno"
+    _attr_name = "Termostati: Orario Inizio Giorno"
     _attr_icon = "mdi:weather-sunny"
     _attr_entity_category = EntityCategory.CONFIG
 
@@ -70,10 +70,10 @@ class DayStartTimeEntity(TimeEntity):
 
 
 class NightStartTimeEntity(TimeEntity):
-    """Time entity for when Night mode starts."""
+    """Time entity for when Night mode starts (shown only when schedule_enabled is ON)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Orario Inizio Notte"
+    _attr_name = "Termostati: Orario Inizio Notte"
     _attr_icon = "mdi:weather-night"
     _attr_entity_category = EntityCategory.CONFIG
 
