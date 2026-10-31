@@ -207,3 +207,4 @@ Ogni azione eseguita dall'integrazione utilizza un formato compatto e coerente s
   * `[SZH Integration] switch.valvola_zona_piano_1 -> on, Termostato Piano 1 18,5<22`
   * `[SZH Integration] number.riscaldamento_casa_isteresi_termostati -> 0,5°C (precedente: 0,3°C)`
   * `[SZH Integration] input_number.potenza_stufa_watt accensione manuale rilevata (120W >= 10W) -> apertura sicurezza Piano 1`
+
