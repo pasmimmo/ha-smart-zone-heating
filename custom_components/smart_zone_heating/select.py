@@ -14,7 +14,6 @@ from .const import (
     CONF_NOTIFY_SERVICE,
     CONF_USE_SEPARATE_MANUAL_ZONE,
     DOMAIN,
-    NOTIFY_LEVEL_DEBUG,
     NOTIFY_LEVELS,
 )
 from .coordinator import SmartZoneHeatingCoordinator, ZoneRuntimeState
@@ -93,7 +92,10 @@ class ZoneTempSensorSelect(SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Update the zone's active temperature sensor."""
         await self.coordinator.async_set_zone_temp_sensor(
-            self.zone_id, option, context=self._context
+            self.zone_id,
+            option,
+            select_entity_id=self.entity_id,
+            context=self._context,
         )
 
 
@@ -131,8 +133,15 @@ class CooldownZoneSelect(SelectEntity):
     async def async_select_option(self, option: str) -> None:
         z_id = self.coordinator.get_zone_id_by_name(option)
         if z_id:
+            old_name = self.current_option or "?"
             self.coordinator.cooldown_zone_id = z_id
             self.coordinator.persist_config_option(CONF_COOLDOWN_ZONE_ID, z_id)
+            self.coordinator._last_trigger_context = self._context
+            await self.coordinator.async_record_action(
+                entity_id=self.entity_id,
+                action_desc=f"-> {option} (prec: {old_name})",
+                context=self._context,
+            )
             await self.coordinator.async_evaluate()
 
 
@@ -170,6 +179,7 @@ class ManualSafetyZoneSelect(SelectEntity):
     async def async_select_option(self, option: str) -> None:
         z_id = self.coordinator.get_zone_id_by_name(option)
         if z_id:
+            old_name = self.current_option or "?"
             self.coordinator.manual_safety_zone_id = z_id
             self.coordinator.use_separate_manual_zone = (
                 z_id != self.coordinator.cooldown_zone_id
@@ -177,6 +187,12 @@ class ManualSafetyZoneSelect(SelectEntity):
             self.coordinator.persist_config_option(CONF_MANUAL_SAFETY_ZONE_ID, z_id)
             self.coordinator.persist_config_option(
                 CONF_USE_SEPARATE_MANUAL_ZONE, self.coordinator.use_separate_manual_zone
+            )
+            self.coordinator._last_trigger_context = self._context
+            await self.coordinator.async_record_action(
+                entity_id=self.entity_id,
+                action_desc=f"-> {option} (prec: {old_name})",
+                context=self._context,
             )
             await self.coordinator.async_evaluate()
 
@@ -219,9 +235,15 @@ class NotifyServiceSelect(SelectEntity):
         return self.coordinator.notify_service or "none"
 
     async def async_select_option(self, option: str) -> None:
+        old_svc = self.current_option
         self.coordinator.notify_service = None if option == "none" else option
         self.coordinator.persist_config_option(CONF_NOTIFY_SERVICE, option)
         self._handle_coordinator_update()
+        await self.coordinator.async_record_action(
+            entity_id=self.entity_id,
+            action_desc=f"-> {option} (prec: {old_svc})",
+            context=self._context,
+        )
 
 
 class NotifyLevelSelect(SelectEntity):
@@ -255,11 +277,12 @@ class NotifyLevelSelect(SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         if option in NOTIFY_LEVELS:
+            old_lvl = self.coordinator.notify_level
             self.coordinator.notify_level = option
             self.coordinator.persist_config_option(CONF_NOTIFY_LEVEL, option)
             self._handle_coordinator_update()
-            if option == NOTIFY_LEVEL_DEBUG:
-                await self.coordinator._async_notify(
-                    NOTIFY_LEVEL_DEBUG,
-                    "Livello notifiche impostato su Debug: riceverai notifiche per tutti gli eventi dell'impianto.",
-                )
+            await self.coordinator.async_record_action(
+                entity_id=self.entity_id,
+                action_desc=f"-> {option} (prec: {old_lvl})",
+                context=self._context,
+            )

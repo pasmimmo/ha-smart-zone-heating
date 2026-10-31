@@ -1,4 +1,4 @@
-"""Coordinator for Smart Zone Heating (Exclusive Control + Master Thermostat Sync + Logbook Context)."""
+"""Coordinator for Smart Zone Heating (Exclusive Control + Master Thermostat Sync + Unified SZH Logbook/Debug)."""
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
@@ -79,6 +79,9 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+LOGBOOK_NAME = "SZH Integration"
+NOTIFY_PREFIX = "[SZH Integration]"
+
 _LEVEL_PRIORITY = {
     NOTIFY_LEVEL_OFF: 0,
     NOTIFY_LEVEL_ERROR: 3,
@@ -98,6 +101,13 @@ def _parse_time(val: str | time | None, default_str: str) -> time:
         if parsed is not None:
             return parsed
     return dt_util.parse_time(default_str) or time(7, 0)
+
+
+def _fmt_temp(val: float | None) -> str:
+    """Format temperature cleanly (e.g. 18.5 or 22)."""
+    if val is None:
+        return "?"
+    return f"{val:g}"
 
 
 class ZoneRuntimeState:
@@ -133,7 +143,7 @@ class ZoneRuntimeState:
 
 
 class SmartZoneHeatingCoordinator:
-    """Manages multi-zone valves, presets/schedule, heater switch, power/timer cooldown, and logbook context."""
+    """Manages multi-zone valves, presets/schedule, heater switch, power/timer cooldown, and SZH logbook/debug."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
@@ -273,60 +283,19 @@ class SmartZoneHeatingCoordinator:
                 if reg_entry.hidden_by == er.RegistryEntryHider.INTEGRATION:
                     ent_reg.async_update_entity(entity_id, hidden_by=None)
 
-    async def async_set_exclusive_control(
-        self, enabled: bool, context: Context | None = None
-    ) -> None:
-        """Toggle exclusive control mode, update switch visibility, and evaluate."""
-        self.exclusive_control = enabled
-        self.persist_config_option(CONF_EXCLUSIVE_CONTROL, enabled)
-        self._last_trigger_context = context
-        self.apply_exclusive_control_visibility()
-        # Reset edge memory when enabling exclusive control so switches are immediately aligned
-        if enabled:
-            self._last_desired_switch_state.clear()
-
-        msg = (
-            "Controllo Esclusivo ATTIVATO: gli switch fisici sono nascosti e bloccati."
-            if enabled
-            else "Controllo Esclusivo DISATTIVATO: gli switch fisici sono visibili e liberi da blocco continuo."
-        )
-        self._fire_logbook_entry(entity_id=None, message=msg, context=context)
-        await self._async_notify(NOTIFY_LEVEL_DEBUG, msg)
-        await self.async_evaluate()
-
-    async def async_set_master_enabled(
-        self, enabled: bool, context: Context | None = None
-    ) -> None:
-        """Turn all zone thermostats ON (HEAT) or OFF via the master switch."""
-        self.master_enabled = enabled
-        self.persist_config_option(CONF_MASTER_ENABLED, enabled)
-        self._last_trigger_context = context
-        for zone in self.zones.values():
-            zone.hvac_mode_enabled = enabled
-
-        state_str = "HEAT (Accesi)" if enabled else "OFF (Spenti)"
-        msg = f"Interruttore generale Impianto Abilitato impostato su {'ON' if enabled else 'OFF'} → tutti i termostati di zona impostati su {state_str}."
-        self._fire_logbook_entry(
-            entity_id=None,
-            message=msg,
-            context=context,
-        )
-        await self._async_notify(NOTIFY_LEVEL_DEBUG, msg)
-        await self.async_evaluate()
-
     def _fire_logbook_entry(
         self,
         entity_id: str | None,
         message: str,
         context: Context | None = None,
     ) -> Context:
-        """Create a linked Context and fire a Home Assistant logbook_entry event."""
+        """Create a linked Context and fire a Home Assistant logbook_entry event with 'SZH Integration:'."""
         action_context = Context(
             user_id=context.user_id if context else None,
             parent_id=context.id if context else None,
         )
         log_data: dict[str, Any] = {
-            "name": self.system_name,
+            "name": LOGBOOK_NAME,
             "message": message,
             "domain": DOMAIN,
         }
@@ -347,16 +316,21 @@ class SmartZoneHeatingCoordinator:
 
     async def _async_notify(self, event_level: str, message: str) -> None:
         """Send notification via configured notify.* service if level matches."""
-        _LOGGER.debug("[%s][%s] %s", self.system_name, event_level.upper(), message)
+        full_msg = (
+            message
+            if message.startswith(NOTIFY_PREFIX)
+            else f"{NOTIFY_PREFIX} {message}"
+        )
+        _LOGGER.debug("%s [%s]", full_msg, event_level.upper())
         if not self._should_notify(event_level):
             return
 
         prefix = {
-            NOTIFY_LEVEL_ERROR: "🚨 [ERRORE]",
-            NOTIFY_LEVEL_WARNING: "⚠️ [WARNING]",
+            NOTIFY_LEVEL_ERROR: "🚨 [ERROR]",
+            NOTIFY_LEVEL_WARNING: "⚠️ [WARN]",
             NOTIFY_LEVEL_DEBUG: "ℹ️ [DEBUG]",
         }.get(event_level, "")
-        title = f"{prefix} {self.system_name}".strip()
+        title = f"{prefix} {LOGBOOK_NAME} ({self.system_name})".strip()
 
         svc = self.notify_service
         if not svc:
@@ -371,18 +345,74 @@ class SmartZoneHeatingCoordinator:
                 await self.hass.services.async_call(
                     "persistent_notification",
                     "create",
-                    {"title": title, "message": message},
+                    {"title": title, "message": full_msg},
                     blocking=False,
                 )
             else:
                 await self.hass.services.async_call(
                     domain,
                     service_name,
-                    {"title": title, "message": message},
+                    {"title": title, "message": full_msg},
                     blocking=False,
                 )
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Impossibile inviare notifica su %s: %s", svc, err)
+
+    async def async_record_action(
+        self,
+        entity_id: str | None,
+        action_desc: str,
+        context: Context | None = None,
+        level: str = NOTIFY_LEVEL_DEBUG,
+    ) -> Context:
+        """Record a unified action in both Home Assistant Logbook and Debug Notifications."""
+        ctx = self._fire_logbook_entry(
+            entity_id=entity_id,
+            message=action_desc,
+            context=context,
+        )
+        target_prefix = f"{entity_id} " if entity_id else ""
+        await self._async_notify(level, f"{NOTIFY_PREFIX} {target_prefix}{action_desc}")
+        return ctx
+
+    async def async_set_exclusive_control(
+        self, enabled: bool, entity_id: str | None = None, context: Context | None = None
+    ) -> None:
+        """Toggle exclusive control mode, update switch visibility, and evaluate."""
+        self.exclusive_control = enabled
+        self.persist_config_option(CONF_EXCLUSIVE_CONTROL, enabled)
+        self._last_trigger_context = context
+        self.apply_exclusive_control_visibility()
+        if enabled:
+            self._last_desired_switch_state.clear()
+
+        state_str = "on" if enabled else "off"
+        detail = "switch fisici nascosti e bloccati" if enabled else "switch fisici visibili e sbloccati"
+        await self.async_record_action(
+            entity_id=entity_id,
+            action_desc=f"-> {state_str}, {detail}",
+            context=context,
+        )
+        await self.async_evaluate()
+
+    async def async_set_master_enabled(
+        self, enabled: bool, entity_id: str | None = None, context: Context | None = None
+    ) -> None:
+        """Turn all zone thermostats ON (HEAT) or OFF via the master switch."""
+        self.master_enabled = enabled
+        self.persist_config_option(CONF_MASTER_ENABLED, enabled)
+        self._last_trigger_context = context
+        for zone in self.zones.values():
+            zone.hvac_mode_enabled = enabled
+
+        state_str = "on" if enabled else "off"
+        hvac_str = "heat" if enabled else "off"
+        await self.async_record_action(
+            entity_id=entity_id,
+            action_desc=f"-> {state_str}, tutti i termostati -> {hvac_str}",
+            context=context,
+        )
+        await self.async_evaluate()
 
     def get_current_schedule_preset(self) -> str:
         """Return PRESET_DAY or PRESET_NIGHT based on current local time."""
@@ -513,8 +543,6 @@ class SmartZoneHeatingCoordinator:
             z.valve_entity for z in self.zones.values()
         }
 
-        # If a switch was changed manually and Exclusive Control is OFF, ignore manual switch toggle
-        # (unless it changed availability to/from unavailable/unknown)
         if entity_id in managed_switches and not self.exclusive_control:
             was_avail = old_state is not None and old_state.state not in (
                 STATE_UNAVAILABLE,
@@ -539,12 +567,17 @@ class SmartZoneHeatingCoordinator:
         self.hass.async_create_task(self.async_evaluate())
 
     async def async_set_zone_temp_sensor(
-        self, zone_id: str, sensor_entity_id: str, context: Context | None = None
+        self,
+        zone_id: str,
+        sensor_entity_id: str,
+        select_entity_id: str | None = None,
+        context: Context | None = None,
     ) -> None:
         """Change the active temperature sensor for a zone on the fly."""
         zone = self.zones.get(zone_id)
         if not zone:
             return
+        old_sensor = zone.temp_sensor
         zone.temp_sensor = sensor_entity_id
         zones_cfg = [dict(z) for z in self.entry.data.get(CONF_ZONES, [])]
         for z_dict in zones_cfg:
@@ -553,10 +586,15 @@ class SmartZoneHeatingCoordinator:
         self.persist_config_option(CONF_ZONES, zones_cfg)
         self._last_trigger_context = context
         self._resubscribe_listeners()
+        await self.async_record_action(
+            entity_id=select_entity_id,
+            action_desc=f"-> {sensor_entity_id} (zona {zone.name}, prec: {old_sensor})",
+            context=context,
+        )
         await self.async_evaluate()
 
     async def async_set_global_away(
-        self, away: bool, context: Context | None = None
+        self, away: bool, entity_id: str | None = None, context: Context | None = None
     ) -> None:
         """Set or clear Away mode across all zones."""
         self.global_away_mode = away
@@ -564,9 +602,12 @@ class SmartZoneHeatingCoordinator:
         target_preset = PRESET_AWAY if away else self.get_current_schedule_preset()
         for zone in self.zones.values():
             zone.apply_preset(target_preset)
-        msg = f"Modalità Fuori Casa {'attivata' if away else 'disattivata'} su tutte le zone."
-        self._fire_logbook_entry(entity_id=None, message=msg, context=context)
-        await self._async_notify(NOTIFY_LEVEL_DEBUG, msg)
+        state_str = "on" if away else "off"
+        await self.async_record_action(
+            entity_id=entity_id,
+            action_desc=f"-> {state_str}, preset tutte le zone -> {target_preset}",
+            context=context,
+        )
         await self.async_evaluate()
 
     def _start_cooldown(self) -> None:
@@ -645,10 +686,11 @@ class SmartZoneHeatingCoordinator:
                 if zone.preset_mode != PRESET_AWAY and not self.global_away_mode:
                     zone.apply_preset(current_period)
             if prev_period is not None:
-                label = "Giorno" if current_period == PRESET_DAY else "Notte"
-                msg = f"Cambio fascia oraria automatico: attivata modalità {label}."
-                self._fire_logbook_entry(entity_id=None, message=msg, context=trigger_ctx)
-                await self._async_notify(NOTIFY_LEVEL_DEBUG, msg)
+                await self.async_record_action(
+                    entity_id=None,
+                    action_desc=f"fascia oraria -> {current_period}",
+                    context=trigger_ctx,
+                )
 
         # Keep global_away_mode synced with zones
         if all(z.preset_mode == PRESET_AWAY for z in self.zones.values()) and self.zones:
@@ -692,7 +734,6 @@ class SmartZoneHeatingCoordinator:
             if not zone.hvac_mode_enabled:
                 zone.requesting_heat = False
             elif zone.current_temp is None:
-                # Fail-safe: stop requesting heat if temperature sensor is unavailable
                 zone.requesting_heat = False
             else:
                 if zone.requesting_heat:
@@ -710,14 +751,6 @@ class SmartZoneHeatingCoordinator:
         cooldown_mode: str | None = None
 
         if any_heating:
-            if not self._was_heating:
-                active_names = ", ".join(
-                    z.name for z in self.zones.values() if z.requesting_heat
-                )
-                await self._async_notify(
-                    NOTIFY_LEVEL_DEBUG,
-                    f"Richiesta calore da [{active_names}]: accensione generatore di calore ({self.heater_entity}).",
-                )
             self._was_heating = True
             if self.in_cooldown:
                 self._cancel_cooldown()
@@ -726,9 +759,10 @@ class SmartZoneHeatingCoordinator:
                 self._was_heating = False
                 self._start_cooldown()
                 cooldown_zone_name = self.get_zone_name(self.cooldown_zone_id) or ""
-                await self._async_notify(
-                    NOTIFY_LEVEL_DEBUG,
-                    f"Tutte le zone soddisfatte: spegnimento generatore di calore e avvio smaltimento calore su {cooldown_zone_name}.",
+                await self.async_record_action(
+                    entity_id=None,
+                    action_desc=f"avvio smaltimento calore su {cooldown_zone_name}",
+                    context=trigger_ctx,
                 )
 
             if self.in_cooldown and self.cooldown_zone_id in self.zones:
@@ -745,9 +779,10 @@ class SmartZoneHeatingCoordinator:
                         cooldown_mode = "power"
                     else:
                         self._cancel_cooldown()
-                        await self._async_notify(
-                            NOTIFY_LEVEL_DEBUG,
-                            f"Smaltimento calore completato: potenza scesa sotto soglia ({self.current_power_watt:.0f}W < {self.power_threshold_watt:.0f}W). Chiusura valvola.",
+                        await self.async_record_action(
+                            entity_id=None,
+                            action_desc=f"fine smaltimento calore, potenza {self.current_power_watt:.0f}W < {self.power_threshold_watt:.0f}W",
+                            context=trigger_ctx,
                         )
                 else:
                     if (
@@ -756,18 +791,21 @@ class SmartZoneHeatingCoordinator:
                         and not self._cooldown_fallback_warned
                     ):
                         self._cooldown_fallback_warned = True
-                        await self._async_notify(
-                            NOTIFY_LEVEL_WARNING,
-                            f"Sensore potenza ({self.power_sensor}) indisponibile durante lo smaltimento calore: attivato timer di fallback ({self.cooldown_minutes} min).",
+                        await self.async_record_action(
+                            entity_id=self.power_sensor,
+                            action_desc=f"indisponibile in smaltimento -> attivo timer fallback ({self.cooldown_minutes} min)",
+                            context=trigger_ctx,
+                            level=NOTIFY_LEVEL_WARNING,
                         )
 
                     if self.cooldown_until is not None and now < self.cooldown_until:
                         cooldown_mode = "timer"
                     else:
                         self._cancel_cooldown()
-                        await self._async_notify(
-                            NOTIFY_LEVEL_DEBUG,
-                            "Smaltimento calore completato (fine timer di fallback). Chiusura valvola.",
+                        await self.async_record_action(
+                            entity_id=None,
+                            action_desc="fine smaltimento calore (scaduto timer fallback)",
+                            context=trigger_ctx,
                         )
 
         # 5. Evaluate Manual Ignition Safety (> threshold W when not heating and not in cooldown)
@@ -785,88 +823,74 @@ class SmartZoneHeatingCoordinator:
 
         if self.manual_safety_active and not self._was_manual_safety_active:
             safety_zone_name = self.get_zone_name(self.manual_safety_zone_id) or ""
-            await self._async_notify(
-                NOTIFY_LEVEL_WARNING,
-                f"Rilevato assorbimento ({self.current_power_watt:.0f}W >= {self.power_threshold_watt:.0f}W) a impianto inattivo (accensione manuale): aperta valvola di sicurezza {safety_zone_name}.",
+            await self.async_record_action(
+                entity_id=self.power_sensor,
+                action_desc=f"accensione manuale rilevata ({self.current_power_watt:.0f}W >= {self.power_threshold_watt:.0f}W) -> apertura sicurezza {safety_zone_name}",
+                context=trigger_ctx,
+                level=NOTIFY_LEVEL_WARNING,
             )
         elif not self.manual_safety_active and self._was_manual_safety_active and not any_heating:
-            await self._async_notify(
-                NOTIFY_LEVEL_DEBUG,
-                "Fine sicurezza accensione manuale: potenza tornata sotto soglia.",
+            await self.async_record_action(
+                entity_id=self.power_sensor,
+                action_desc=f"fine sicurezza accensione manuale ({_fmt_temp(self.current_power_watt)}W < {self.power_threshold_watt:g}W)",
+                context=trigger_ctx,
             )
         self._was_manual_safety_active = self.manual_safety_active
 
         # 6. Determine final valve state for each zone (Heat Request OR Cooldown OR Manual Safety)
         for zone in self.zones.values():
             should_open_valve = zone.requesting_heat
-            valve_reason = ""
+            t_curr = _fmt_temp(zone.current_temp)
+            t_targ = _fmt_temp(zone.target_temp)
 
             if zone.requesting_heat:
-                t_curr = f"{zone.current_temp:.1f}°C" if zone.current_temp is not None else "?"
-                valve_reason = f"Richiesta calore Termostato {zone.name} ({t_curr} → target {zone.target_temp:.1f}°C)"
-
-            if not should_open_valve and cooldown_mode is not None and zone.zone_id == self.cooldown_zone_id:
+                valve_reason = f"Termostato {zone.name} {t_curr}<{t_targ}"
+            elif cooldown_mode is not None and zone.zone_id == self.cooldown_zone_id:
                 should_open_valve = True
                 if cooldown_mode == "power":
-                    w_str = f"{self.current_power_watt:.0f}W" if self.current_power_watt is not None else ""
-                    zone.forced_open_reason = f"Smaltimento calore da potenza ({w_str})"
+                    w_str = f"{self.current_power_watt:.0f}W>={self.power_threshold_watt:g}W" if self.current_power_watt is not None else "attesa potenza"
+                    zone.forced_open_reason = f"smaltimento calore ({w_str})"
                 else:
-                    zone.forced_open_reason = (
-                        f"Smaltimento calore timer fallback ({self.cooldown_remaining_minutes} min)"
-                    )
+                    zone.forced_open_reason = f"smaltimento timer ({self.cooldown_remaining_minutes}m)"
                 valve_reason = zone.forced_open_reason
-
-            if (
-                not should_open_valve
-                and self.manual_safety_active
-                and zone.zone_id == self.manual_safety_zone_id
-            ):
+            elif self.manual_safety_active and zone.zone_id == self.manual_safety_zone_id:
                 should_open_valve = True
                 zone.forced_open_reason = (
-                    f"Sicurezza accensione manuale ({self.current_power_watt:.0f}W >= {self.power_threshold_watt:.0f}W)"
+                    f"sicurezza accensione manuale ({self.current_power_watt:.0f}W>={self.power_threshold_watt:g}W)"
                 )
                 valve_reason = zone.forced_open_reason
-
-            if not should_open_valve:
+            else:
                 if not zone.hvac_mode_enabled:
-                    valve_reason = f"Termostato {zone.name} spento (OFF)"
+                    valve_reason = f"Termostato {zone.name} off"
+                elif zone.current_temp is None:
+                    valve_reason = f"sensore {zone.temp_sensor} indisponibile"
                 else:
-                    valve_reason = f"Zona {zone.name} in temperatura (nessuna richiesta)"
+                    valve_reason = f"nessuna richiesta ({t_curr}>={t_targ})"
 
-            changed = await self._async_command_switch(
+            await self._async_command_switch(
                 entity_id=zone.valve_entity,
                 turn_on=should_open_valve,
                 reason=valve_reason,
                 trigger_context=trigger_ctx,
             )
-            if changed:
-                state_label = "APERTA" if should_open_valve else "CHIUSA"
-                await self._async_notify(
-                    NOTIFY_LEVEL_DEBUG,
-                    f"Valvola {zone.name} ({zone.valve_entity}): {state_label} ({valve_reason}).",
-                )
 
         # 7. Control main Heater switch (ON only when at least one zone requests heat)
         if any_heating:
             active_zones_str = ", ".join(
-                z.name for z in self.zones.values() if z.requesting_heat
+                f"{z.name} {_fmt_temp(z.current_temp)}<{_fmt_temp(z.target_temp)}"
+                for z in self.zones.values()
+                if z.requesting_heat
             )
-            heater_reason = f"Richiesta calore attiva da: {active_zones_str}"
+            heater_reason = f"richiesta calore ({active_zones_str})"
         else:
-            heater_reason = "Nessuna zona richiede calore"
+            heater_reason = "nessuna richiesta"
 
-        heater_changed = await self._async_command_switch(
+        await self._async_command_switch(
             entity_id=self.heater_entity,
             turn_on=any_heating,
             reason=heater_reason,
             trigger_context=trigger_ctx,
         )
-        if heater_changed:
-            h_label = "ACCESO" if any_heating else "SPENTO"
-            await self._async_notify(
-                NOTIFY_LEVEL_DEBUG,
-                f"Generatore di calore ({self.heater_entity}): {h_label} ({heater_reason}).",
-            )
 
         # 8. Update Problem detection, send ERROR notifications on unavailability changes, & set System State
         current_unavail_set = set(unavailable)
@@ -875,14 +899,18 @@ class SmartZoneHeatingCoordinator:
         self._prev_unavailable_set = current_unavail_set
 
         if newly_unavailable:
-            await self._async_notify(
-                NOTIFY_LEVEL_ERROR,
-                f"Entità diventate INDISPONIBILI: {', '.join(newly_unavailable)}.",
+            await self.async_record_action(
+                entity_id=newly_unavailable[0] if len(newly_unavailable) == 1 else None,
+                action_desc=f"entità indisponibili: {', '.join(newly_unavailable)}",
+                context=trigger_ctx,
+                level=NOTIFY_LEVEL_ERROR,
             )
         if newly_restored:
-            await self._async_notify(
-                NOTIFY_LEVEL_ERROR,
-                f"Entità tornate DISPONIBILI: {', '.join(newly_restored)}.",
+            await self.async_record_action(
+                entity_id=newly_restored[0] if len(newly_restored) == 1 else None,
+                action_desc=f"entità ripristinate: {', '.join(newly_restored)}",
+                context=trigger_ctx,
+                level=NOTIFY_LEVEL_ERROR,
             )
 
         self.unavailable_entities = sorted(current_unavail_set)
@@ -914,12 +942,11 @@ class SmartZoneHeatingCoordinator:
         reason: str,
         trigger_context: Context | None = None,
     ) -> bool:
-        """Command a switch respecting Exclusive Control vs Edge-Triggered mode, and record Logbook context."""
+        """Command a switch respecting Exclusive Control vs Edge-Triggered mode, and record unified SZH logbook + debug notification."""
         prev_desired = self._last_desired_switch_state.get(entity_id)
         desired_changed = prev_desired is None or prev_desired != turn_on
         self._last_desired_switch_state[entity_id] = turn_on
 
-        # When Exclusive Control is OFF, only command the switch when the integration's desired state changes
         if not self.exclusive_control and not desired_changed:
             return False
 
@@ -931,16 +958,18 @@ class SmartZoneHeatingCoordinator:
         if is_currently_on == turn_on:
             return False
 
-        # If Exclusive Control is reverting a manual change (desired didn't change, but physical switch did)
-        if self.exclusive_control and not desired_changed:
-            log_reason = f"Controllo Esclusivo attivo → ripristinato su {'ON' if turn_on else 'OFF'} ({reason})"
-        else:
-            log_reason = f"Impostato su {'ON' if turn_on else 'OFF'} ({reason})"
+        target_str = "on" if turn_on else "off"
 
-        action_context = self._fire_logbook_entry(
+        if self.exclusive_control and not desired_changed:
+            log_msg = f"ripristino stato -> {target_str}, {reason} (controllo esclusivo)"
+        else:
+            log_msg = f"-> {target_str}, {reason}"
+
+        action_context = await self.async_record_action(
             entity_id=entity_id,
-            message=log_reason,
+            action_desc=log_msg,
             context=trigger_context,
+            level=NOTIFY_LEVEL_DEBUG,
         )
 
         domain = entity_id.split(".")[0]

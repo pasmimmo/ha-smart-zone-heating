@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, NOTIFY_LEVEL_DEBUG, PRESET_AWAY, PRESET_DAY, PRESET_NIGHT
+from .const import DOMAIN, PRESET_AWAY, PRESET_DAY, PRESET_NIGHT
 from .coordinator import SmartZoneHeatingCoordinator, ZoneRuntimeState
 
 
@@ -142,6 +142,7 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature and save it for the currently active preset."""
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is not None:
+            old_temp = self.zone.target_temp
             new_temp = float(temp)
             self.zone.target_temp = new_temp
             if self.zone.preset_mode == PRESET_DAY:
@@ -151,39 +152,34 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
             elif self.zone.preset_mode == PRESET_AWAY:
                 self.zone.temp_away = new_temp
             self.coordinator._last_trigger_context = self._context
-            msg = f"Temperatura target di {self.zone.name} impostata a {new_temp:.1f}°C ({self.zone.preset_mode})"
-            self.coordinator._fire_logbook_entry(
+            await self.coordinator.async_record_action(
                 entity_id=self.entity_id,
-                message=msg,
+                action_desc=f"-> target {new_temp:g}°C (preset {self.zone.preset_mode}, prec: {old_temp:g}°C)",
                 context=self._context,
             )
-            await self.coordinator._async_notify(NOTIFY_LEVEL_DEBUG, msg)
             await self.coordinator.async_evaluate()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode (day, night, away)."""
         if preset_mode in self._attr_preset_modes:
+            old_preset = self.zone.preset_mode
             self.zone.apply_preset(preset_mode)
             self.coordinator._last_trigger_context = self._context
-            msg = f"Preset di {self.zone.name} impostato su '{preset_mode}' ({self.zone.target_temp:.1f}°C)"
-            self.coordinator._fire_logbook_entry(
+            await self.coordinator.async_record_action(
                 entity_id=self.entity_id,
-                message=msg,
+                action_desc=f"-> preset {preset_mode} (target {self.zone.target_temp:g}°C, prec: {old_preset})",
                 context=self._context,
             )
-            await self.coordinator._async_notify(NOTIFY_LEVEL_DEBUG, msg)
             await self.coordinator.async_evaluate()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""
         self.zone.hvac_mode_enabled = hvac_mode == HVACMode.HEAT
         self.coordinator._last_trigger_context = self._context
-        mode_str = "Riscaldamento (HEAT)" if self.zone.hvac_mode_enabled else "Spento (OFF)"
-        msg = f"Termostato {self.zone.name} impostato su {mode_str}"
-        self.coordinator._fire_logbook_entry(
+        mode_str = "heat" if self.zone.hvac_mode_enabled else "off"
+        await self.coordinator.async_record_action(
             entity_id=self.entity_id,
-            message=msg,
+            action_desc=f"-> {mode_str} (Termostato {self.zone.name})",
             context=self._context,
         )
-        await self.coordinator._async_notify(NOTIFY_LEVEL_DEBUG, msg)
         await self.coordinator.async_evaluate()

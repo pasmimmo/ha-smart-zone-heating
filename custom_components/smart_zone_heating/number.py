@@ -60,8 +60,15 @@ class HysteresisNumber(NumberEntity):
         return self.coordinator.hysteresis
 
     async def async_set_native_value(self, value: float) -> None:
+        old_val = self.coordinator.hysteresis
         self.coordinator.hysteresis = float(value)
         self.coordinator.persist_config_option(CONF_HYSTERESIS, self.coordinator.hysteresis)
+        self.coordinator._last_trigger_context = self._context
+        await self.coordinator.async_record_action(
+            entity_id=self.entity_id,
+            action_desc=f"-> {self.coordinator.hysteresis:g}°C (prec: {old_val:g}°C)",
+            context=self._context,
+        )
         await self.coordinator.async_evaluate()
 
 
@@ -98,9 +105,16 @@ class CooldownMinutesNumber(NumberEntity):
         return float(self.coordinator.cooldown_minutes)
 
     async def async_set_native_value(self, value: float) -> None:
+        old_val = self.coordinator.cooldown_minutes
         self.coordinator.cooldown_minutes = int(value)
         self.coordinator.persist_config_option(
             CONF_COOLDOWN_MINUTES, self.coordinator.cooldown_minutes
+        )
+        self.coordinator._last_trigger_context = self._context
+        await self.coordinator.async_record_action(
+            entity_id=self.entity_id,
+            action_desc=f"-> {self.coordinator.cooldown_minutes} min (prec: {old_val} min)",
+            context=self._context,
         )
         await self.coordinator.async_evaluate()
 
@@ -138,8 +152,15 @@ class PowerThresholdNumber(NumberEntity):
         return self.coordinator.power_threshold_watt
 
     async def async_set_native_value(self, value: float) -> None:
+        old_val = self.coordinator.power_threshold_watt
         self.coordinator.power_threshold_watt = float(value)
         self.coordinator.persist_config_option(
             CONF_POWER_THRESHOLD_WATT, self.coordinator.power_threshold_watt
+        )
+        self.coordinator._last_trigger_context = self._context
+        await self.coordinator.async_record_action(
+            entity_id=self.entity_id,
+            action_desc=f"-> {self.coordinator.power_threshold_watt:g}W (prec: {old_val:g}W)",
+            context=self._context,
         )
         await self.coordinator.async_evaluate()

@@ -56,9 +56,16 @@ class DayStartTimeEntity(TimeEntity):
         return self.coordinator.day_start_time
 
     async def async_set_value(self, value: time) -> None:
+        old_val = self.coordinator.day_start_time.strftime("%H:%M")
         self.coordinator.day_start_time = value
         self.coordinator.persist_config_option(CONF_DAY_START_TIME, value.isoformat())
         self.coordinator._last_scheduled_period = None
+        self.coordinator._last_trigger_context = self._context
+        await self.coordinator.async_record_action(
+            entity_id=self.entity_id,
+            action_desc=f"-> {value.strftime('%H:%M')} (prec: {old_val})",
+            context=self._context,
+        )
         await self.coordinator.async_evaluate()
 
 
@@ -90,7 +97,14 @@ class NightStartTimeEntity(TimeEntity):
         return self.coordinator.night_start_time
 
     async def async_set_value(self, value: time) -> None:
+        old_val = self.coordinator.night_start_time.strftime("%H:%M")
         self.coordinator.night_start_time = value
         self.coordinator.persist_config_option(CONF_NIGHT_START_TIME, value.isoformat())
         self.coordinator._last_scheduled_period = None
+        self.coordinator._last_trigger_context = self._context
+        await self.coordinator.async_record_action(
+            entity_id=self.entity_id,
+            action_desc=f"-> {value.strftime('%H:%M')} (prec: {old_val})",
+            context=self._context,
+        )
         await self.coordinator.async_evaluate()

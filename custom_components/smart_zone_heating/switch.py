@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import CONF_SCHEDULE_ENABLED, DOMAIN, NOTIFY_LEVEL_DEBUG
+from .const import CONF_SCHEDULE_ENABLED, DOMAIN
 from .coordinator import SmartZoneHeatingCoordinator
 
 
@@ -58,10 +58,14 @@ class MasterHeatingSwitch(SwitchEntity):
         return self.coordinator.master_enabled
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self.coordinator.async_set_master_enabled(True, context=self._context)
+        await self.coordinator.async_set_master_enabled(
+            True, entity_id=self.entity_id, context=self._context
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self.coordinator.async_set_master_enabled(False, context=self._context)
+        await self.coordinator.async_set_master_enabled(
+            False, entity_id=self.entity_id, context=self._context
+        )
 
 
 class GlobalAwaySwitch(SwitchEntity, RestoreEntity):
@@ -95,10 +99,14 @@ class GlobalAwaySwitch(SwitchEntity, RestoreEntity):
         return self.coordinator.global_away_mode
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self.coordinator.async_set_global_away(True, context=self._context)
+        await self.coordinator.async_set_global_away(
+            True, entity_id=self.entity_id, context=self._context
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self.coordinator.async_set_global_away(False, context=self._context)
+        await self.coordinator.async_set_global_away(
+            False, entity_id=self.entity_id, context=self._context
+        )
 
 
 class ScheduleEnabledSwitch(SwitchEntity):
@@ -133,8 +141,10 @@ class ScheduleEnabledSwitch(SwitchEntity):
         self.coordinator.persist_config_option(CONF_SCHEDULE_ENABLED, True)
         self.coordinator._last_scheduled_period = None
         self.coordinator._last_trigger_context = self._context
-        await self.coordinator._async_notify(
-            NOTIFY_LEVEL_DEBUG, "Cambio automatico orario Giorno/Notte abilitato."
+        await self.coordinator.async_record_action(
+            entity_id=self.entity_id,
+            action_desc="-> on, cambio automatico Giorno/Notte attivo",
+            context=self._context,
         )
         await self.coordinator.async_evaluate()
 
@@ -142,8 +152,10 @@ class ScheduleEnabledSwitch(SwitchEntity):
         self.coordinator.schedule_enabled = False
         self.coordinator.persist_config_option(CONF_SCHEDULE_ENABLED, False)
         self.coordinator._last_trigger_context = self._context
-        await self.coordinator._async_notify(
-            NOTIFY_LEVEL_DEBUG, "Cambio automatico orario Giorno/Notte disabilitato."
+        await self.coordinator.async_record_action(
+            entity_id=self.entity_id,
+            action_desc="-> off, cambio automatico Giorno/Notte disattivato",
+            context=self._context,
         )
         await self.coordinator.async_evaluate()
 
@@ -176,7 +188,11 @@ class ExclusiveControlSwitch(SwitchEntity):
         return self.coordinator.exclusive_control
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self.coordinator.async_set_exclusive_control(True, context=self._context)
+        await self.coordinator.async_set_exclusive_control(
+            True, entity_id=self.entity_id, context=self._context
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self.coordinator.async_set_exclusive_control(False, context=self._context)
+        await self.coordinator.async_set_exclusive_control(
+            False, entity_id=self.entity_id, context=self._context
+        )
