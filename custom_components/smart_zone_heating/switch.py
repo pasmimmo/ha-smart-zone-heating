@@ -139,9 +139,9 @@ class ScheduleEnabledSwitch(SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         self.coordinator.schedule_enabled = True
         self.coordinator.persist_config_option(CONF_SCHEDULE_ENABLED, True)
-        self.coordinator.apply_dynamic_config_visibility()
         self.coordinator._last_scheduled_period = None
         self.coordinator._last_trigger_context = self._context
+        self.coordinator._notify_listeners()
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
             action_desc="-> on, cambio automatico Giorno/Notte attivo (orari visibili)",
@@ -152,8 +152,8 @@ class ScheduleEnabledSwitch(SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.coordinator.schedule_enabled = False
         self.coordinator.persist_config_option(CONF_SCHEDULE_ENABLED, False)
-        self.coordinator.apply_dynamic_config_visibility()
         self.coordinator._last_trigger_context = self._context
+        self.coordinator._notify_listeners()
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
             action_desc="-> off, cambio automatico Giorno/Notte disattivato (orari nascosti)",

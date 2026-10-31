@@ -107,10 +107,16 @@
         }
       },
       "notifications": {
-        "title": "Notification & Debug Settings",
-        "description": "Select notification service and verbosity level.",
+        "title": "Notification Settings",
+        "description": "Select notification service (if enabled, you will choose the verbosity level in the next step).",
         "data": {
-          "notify_service": "Notification service (e.g. notify.mobile_app_... or notify.persistent_notification)",
+          "notify_service": "Notification service (e.g. notify.mobile_app_... or notify.persistent_notification)"
+        }
+      },
+      "notify_level": {
+        "title": "Notification Verbosity Level",
+        "description": "Select which events should trigger a notification.",
+        "data": {
           "notify_level": "Notification level (Off / Error / Warning / Debug)"
         }
       }

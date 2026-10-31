@@ -107,10 +107,16 @@
         }
       },
       "notifications": {
-        "title": "Configurazione Notifiche e Debug",
-        "description": "Scegli il servizio di notifica e il livello di dettaglio dei messaggi inviati dall'integrazione.",
+        "title": "Configurazione Notifiche",
+        "description": "Scegli il servizio di notifica (se attivo, nel passo successivo potrai scegliere il livello di dettaglio).",
         "data": {
-          "notify_service": "Servizio di notifica (es. notify.mobile_app_... o notify.persistent_notification)",
+          "notify_service": "Servizio di notifica (es. notify.mobile_app_... o notify.persistent_notification)"
+        }
+      },
+      "notify_level": {
+        "title": "Livello di Dettaglio Notifiche",
+        "description": "Scegli quali eventi devono inviare una notifica.",
+        "data": {
           "notify_level": "Livello notifiche (Off / Error / Warning / Debug)"
         }
       }

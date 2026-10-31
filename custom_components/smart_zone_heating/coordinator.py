@@ -508,9 +508,8 @@ class SmartZoneHeatingCoordinator:
             listener()
 
     async def async_start(self) -> None:
-        """Start tracking entities, apply exclusive control & dynamic visibility, and evaluate initial state."""
+        """Start tracking entities, apply exclusive control visibility, and evaluate initial state."""
         self.apply_exclusive_control_visibility()
-        self.apply_dynamic_config_visibility()
         self._resubscribe_listeners()
         self._unsub_periodic_tick = async_track_time_interval(
             self.hass,

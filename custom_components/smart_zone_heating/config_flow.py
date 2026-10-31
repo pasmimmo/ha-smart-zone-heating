@@ -673,22 +673,20 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
     async def async_step_notifications(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
-        """Section 3: Notification service & verbosity level."""
+        """Section 3: Notification service (if selected, proceeds to level step)."""
         data = {**self._entry.data, **self._entry.options}
 
         if user_input is not None:
             new_options = dict(self._entry.options)
             notify_svc = user_input.get(CONF_NOTIFY_SERVICE)
-            new_options[CONF_NOTIFY_SERVICE] = (
-                None if not notify_svc or notify_svc == "none" else notify_svc
-            )
-            new_options[CONF_NOTIFY_LEVEL] = user_input.get(
-                CONF_NOTIFY_LEVEL, DEFAULT_NOTIFY_LEVEL
-            )
+            clean_svc = None if not notify_svc or notify_svc == "none" else notify_svc
+            new_options[CONF_NOTIFY_SERVICE] = clean_svc
+            if clean_svc is not None:
+                self._pending_options = new_options
+                return await self.async_step_notify_level()
             return self.async_create_entry(title="", data=new_options)
 
         notify_options = _get_notify_service_options(self.hass)
-        level_options = _get_notify_level_options()
         current_notify = data.get(CONF_NOTIFY_SERVICE) or "none"
 
         schema = vol.Schema(
@@ -703,6 +701,25 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
                         custom_value=True,
                     )
                 ),
+            }
+        )
+        return self.async_show_form(step_id="notifications", data_schema=schema)
+
+    async def async_step_notify_level(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        """Section 3b (shown only when a notify service is selected): Notification level."""
+        data = {**self._entry.data, **self._entry.options}
+
+        if user_input is not None:
+            self._pending_options[CONF_NOTIFY_LEVEL] = user_input.get(
+                CONF_NOTIFY_LEVEL, DEFAULT_NOTIFY_LEVEL
+            )
+            return self.async_create_entry(title="", data=self._pending_options)
+
+        level_options = _get_notify_level_options()
+        schema = vol.Schema(
+            {
                 vol.Required(
                     CONF_NOTIFY_LEVEL,
                     default=data.get(CONF_NOTIFY_LEVEL, DEFAULT_NOTIFY_LEVEL),
@@ -714,4 +731,4 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
                 ),
             }
         )
-        return self.async_show_form(step_id="notifications", data_schema=schema)
+        return self.async_show_form(step_id="notify_level", data_schema=schema)

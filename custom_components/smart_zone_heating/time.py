@@ -1,4 +1,4 @@
-"""Time entities under Device Configuration for Day and Night schedule hours."""
+"""Time entities under Device Configuration for Day and Night schedule hours (dynamically added/removed)."""
 from __future__ import annotations
 
 from datetime import time
@@ -7,6 +7,7 @@ from homeassistant.components.time import TimeEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_DAY_START_TIME, CONF_NIGHT_START_TIME, DOMAIN
@@ -18,14 +19,48 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Day and Night start time entities."""
+    """Set up Day and Night start time entities dynamically when schedule_enabled is True."""
     coordinator: SmartZoneHeatingCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        [
-            DayStartTimeEntity(coordinator),
-            NightStartTimeEntity(coordinator),
-        ]
-    )
+    active_entities: list[TimeEntity] = []
+    last_schedule_enabled: bool | None = None
+
+    async def _async_sync_schedule_time_entities() -> None:
+        nonlocal last_schedule_enabled
+        if coordinator.schedule_enabled == last_schedule_enabled:
+            return
+        last_schedule_enabled = coordinator.schedule_enabled
+        ent_reg = er.async_get(hass)
+
+        if coordinator.schedule_enabled:
+            if not active_entities:
+                new_entities: list[TimeEntity] = [
+                    DayStartTimeEntity(coordinator),
+                    NightStartTimeEntity(coordinator),
+                ]
+                active_entities.extend(new_entities)
+                async_add_entities(new_entities)
+        else:
+            while active_entities:
+                ent = active_entities.pop()
+                ent_id = ent.entity_id
+                await ent.async_remove(force_remove=True)
+                if ent_id and ent_reg.async_get(ent_id):
+                    ent_reg.async_remove(ent_id)
+            for uid in (
+                f"{entry.entry_id}_day_start_time",
+                f"{entry.entry_id}_night_start_time",
+            ):
+                if eid := ent_reg.async_get_entity_id("time", DOMAIN, uid):
+                    ent_reg.async_remove(eid)
+
+    await _async_sync_schedule_time_entities()
+
+    @callback
+    def _on_coordinator_update() -> None:
+        if coordinator.schedule_enabled != last_schedule_enabled:
+            hass.async_create_task(_async_sync_schedule_time_entities())
+
+    entry.async_on_unload(coordinator.async_add_listener(_on_coordinator_update))
 
 
 class DayStartTimeEntity(TimeEntity):
@@ -49,7 +84,8 @@ class DayStartTimeEntity(TimeEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        self.async_write_ha_state()
+        if self.hass and self.entity_id:
+            self.async_write_ha_state()
 
     @property
     def native_value(self) -> time:
@@ -90,7 +126,8 @@ class NightStartTimeEntity(TimeEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        self.async_write_ha_state()
+        if self.hass and self.entity_id:
+            self.async_write_ha_state()
 
     @property
     def native_value(self) -> time:

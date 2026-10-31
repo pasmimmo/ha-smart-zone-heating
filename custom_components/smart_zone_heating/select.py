@@ -5,6 +5,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -35,10 +36,46 @@ async def async_setup_entry(
             CooldownZoneSelect(coordinator),
             ManualSafetyZoneSelect(coordinator),
             NotifyServiceSelect(coordinator),
-            NotifyLevelSelect(coordinator),
         ]
     )
     async_add_entities(entities)
+
+    # Dynamically add/remove NotifyLevelSelect based on whether a notify_service is selected
+    active_level_entities: list[SelectEntity] = []
+    last_has_notify: bool | None = None
+
+    async def _async_sync_notify_level_entity() -> None:
+        nonlocal last_has_notify
+        has_notify = bool(coordinator.notify_service)
+        if has_notify == last_has_notify:
+            return
+        last_has_notify = has_notify
+        ent_reg = er.async_get(hass)
+
+        if has_notify:
+            if not active_level_entities:
+                lvl_ent = NotifyLevelSelect(coordinator)
+                active_level_entities.append(lvl_ent)
+                async_add_entities([lvl_ent])
+        else:
+            while active_level_entities:
+                ent = active_level_entities.pop()
+                ent_id = ent.entity_id
+                await ent.async_remove(force_remove=True)
+                if ent_id and ent_reg.async_get(ent_id):
+                    ent_reg.async_remove(ent_id)
+            uid = f"{entry.entry_id}_notify_level_select"
+            if eid := ent_reg.async_get_entity_id("select", DOMAIN, uid):
+                ent_reg.async_remove(eid)
+
+    await _async_sync_notify_level_entity()
+
+    @callback
+    def _on_coordinator_update() -> None:
+        if bool(coordinator.notify_service) != last_has_notify:
+            hass.async_create_task(_async_sync_notify_level_entity())
+
+    entry.async_on_unload(coordinator.async_add_listener(_on_coordinator_update))
 
 
 class ZoneTempSensorSelect(SelectEntity):
@@ -238,8 +275,7 @@ class NotifyServiceSelect(SelectEntity):
         old_svc = self.current_option
         self.coordinator.notify_service = None if option == "none" else option
         self.coordinator.persist_config_option(CONF_NOTIFY_SERVICE, option)
-        self.coordinator.apply_dynamic_config_visibility()
-        self._handle_coordinator_update()
+        self.coordinator._notify_listeners()
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
             action_desc=f"-> {option} (prec: {old_svc})",
@@ -248,7 +284,7 @@ class NotifyServiceSelect(SelectEntity):
 
 
 class NotifyLevelSelect(SelectEntity):
-    """Select entity to configure notification verbosity (off / error / warning / debug)."""
+    """Select entity to configure notification verbosity (shown only when a notify service is active)."""
 
     _attr_has_entity_name = True
     _attr_name = "Notifiche: 2. Livello"
@@ -270,7 +306,8 @@ class NotifyLevelSelect(SelectEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        self.async_write_ha_state()
+        if self.hass and self.entity_id:
+            self.async_write_ha_state()
 
     @property
     def current_option(self) -> str:
