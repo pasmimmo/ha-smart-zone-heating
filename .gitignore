@@ -1,8 +1,9 @@
-# Home Assistant local test config (keep only configuration.yaml)
-ha_test_config/*
-!ha_test_config/configuration.yaml
+# Local development / Docker test environment (tracked only in develop branch)
+docker-compose.yml
+ha_test_config/
+
+# Python / OS artifacts
 __pycache__/
 *.pyc
 .DS_Store
 *.zip
-
