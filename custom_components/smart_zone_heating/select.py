@@ -1,4 +1,4 @@
-"""Select entities under Device Configuration to choose zone sensors, safety valves, and notification settings."""
+"""Select entities: Zone sensors & Safety valves under Configuration, Notification settings under Diagnostics."""
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
@@ -40,7 +40,7 @@ async def async_setup_entry(
     )
     async_add_entities(entities)
 
-    # Dynamically add/remove NotifyLevelSelect based on whether a notify_service is selected
+    # Dynamically add/remove NotifyLevelSelect in Diagnostics based on whether a notify_service is selected
     active_level_entities: list[SelectEntity] = []
     last_has_notify: bool | None = None
 
@@ -89,7 +89,7 @@ class ZoneTempSensorSelect(SelectEntity):
         self.coordinator = coordinator
         self.zone_id = zone_id
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{zone_id}_temp_sensor_select"
-        self._attr_name = f"Termostati: Sensore {self.zone.name}"
+        self._attr_name = f"Sensore Temperatura {self.zone.name}"
         self._attr_device_info = coordinator.device_info
 
     @property
@@ -98,6 +98,13 @@ class ZoneTempSensorSelect(SelectEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        ent_reg = er.async_get(self.hass)
+        if self.entity_id and ent_reg.async_get(self.entity_id):
+            ent_reg.async_update_entity(
+                self.entity_id,
+                entity_category=EntityCategory.CONFIG,
+                original_name=self._attr_name,
+            )
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -140,7 +147,7 @@ class CooldownZoneSelect(SelectEntity):
     """Select which zone valve stays open during heat dissipation (cooldown)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Sicurezza: Valvola Smaltimento Calore"
+    _attr_name = "Valvola Smaltimento Calore"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:valve-open"
 
@@ -151,6 +158,13 @@ class CooldownZoneSelect(SelectEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        ent_reg = er.async_get(self.hass)
+        if self.entity_id and ent_reg.async_get(self.entity_id):
+            ent_reg.async_update_entity(
+                self.entity_id,
+                entity_category=EntityCategory.CONFIG,
+                original_name=self._attr_name,
+            )
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -186,7 +200,7 @@ class ManualSafetyZoneSelect(SelectEntity):
     """Select which zone valve opens when manual ignition / power consumption > threshold W is detected."""
 
     _attr_has_entity_name = True
-    _attr_name = "Sicurezza: Valvola Accensione Manuale"
+    _attr_name = "Valvola Sicurezza Accensione Manuale"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:shield-alert-outline"
 
@@ -197,6 +211,13 @@ class ManualSafetyZoneSelect(SelectEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        ent_reg = er.async_get(self.hass)
+        if self.entity_id and ent_reg.async_get(self.entity_id):
+            ent_reg.async_update_entity(
+                self.entity_id,
+                entity_category=EntityCategory.CONFIG,
+                original_name=self._attr_name,
+            )
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -235,11 +256,11 @@ class ManualSafetyZoneSelect(SelectEntity):
 
 
 class NotifyServiceSelect(SelectEntity):
-    """Select entity to pick the notification service (notify.*) on the Device Page."""
+    """Select entity in Diagnostics box to pick the notification service (notify.*)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Notifiche: 1. Servizio"
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_name = "Servizio di Notifica"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:cellphone-message"
 
     def __init__(self, coordinator: SmartZoneHeatingCoordinator) -> None:
@@ -249,6 +270,13 @@ class NotifyServiceSelect(SelectEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        ent_reg = er.async_get(self.hass)
+        if self.entity_id and ent_reg.async_get(self.entity_id):
+            ent_reg.async_update_entity(
+                self.entity_id,
+                entity_category=EntityCategory.DIAGNOSTIC,
+                original_name=self._attr_name,
+            )
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -284,12 +312,12 @@ class NotifyServiceSelect(SelectEntity):
 
 
 class NotifyLevelSelect(SelectEntity):
-    """Select entity to configure notification verbosity (shown only when a notify service is active)."""
+    """Select entity in Diagnostics box to configure notification verbosity (shown only when a notify service is active)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Notifiche: 2. Livello"
+    _attr_name = "Livello Notifiche"
     _attr_translation_key = "notify_level"
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:bell-cog-outline"
     _attr_options = NOTIFY_LEVELS
 
@@ -300,6 +328,13 @@ class NotifyLevelSelect(SelectEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        ent_reg = er.async_get(self.hass)
+        if self.entity_id and ent_reg.async_get(self.entity_id):
+            ent_reg.async_update_entity(
+                self.entity_id,
+                entity_category=EntityCategory.DIAGNOSTIC,
+                original_name=self._attr_name,
+            )
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )

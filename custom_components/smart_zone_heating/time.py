@@ -1,11 +1,10 @@
-"""Time entities under Device Configuration for Day and Night schedule hours (dynamically added/removed)."""
+"""Time entities in Controls box for Day and Night schedule hours (dynamically added/removed)."""
 from __future__ import annotations
 
 from datetime import time
 
 from homeassistant.components.time import TimeEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -64,12 +63,12 @@ async def async_setup_entry(
 
 
 class DayStartTimeEntity(TimeEntity):
-    """Time entity for when Day mode starts (shown only when schedule_enabled is ON)."""
+    """Time entity in Controls box for when Day mode starts (shown only when schedule_enabled is ON)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Termostati: Orario Inizio Giorno"
+    _attr_name = "Orario Inizio Giorno"
     _attr_icon = "mdi:weather-sunny"
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = None
 
     def __init__(self, coordinator: SmartZoneHeatingCoordinator) -> None:
         self.coordinator = coordinator
@@ -78,6 +77,13 @@ class DayStartTimeEntity(TimeEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        ent_reg = er.async_get(self.hass)
+        if self.entity_id and ent_reg.async_get(self.entity_id):
+            ent_reg.async_update_entity(
+                self.entity_id,
+                entity_category=None,
+                original_name=self._attr_name,
+            )
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -106,12 +112,12 @@ class DayStartTimeEntity(TimeEntity):
 
 
 class NightStartTimeEntity(TimeEntity):
-    """Time entity for when Night mode starts (shown only when schedule_enabled is ON)."""
+    """Time entity in Controls box for when Night mode starts (shown only when schedule_enabled is ON)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Termostati: Orario Inizio Notte"
+    _attr_name = "Orario Inizio Notte"
     _attr_icon = "mdi:weather-night"
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = None
 
     def __init__(self, coordinator: SmartZoneHeatingCoordinator) -> None:
         self.coordinator = coordinator
@@ -120,6 +126,13 @@ class NightStartTimeEntity(TimeEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        ent_reg = er.async_get(self.hass)
+        if self.entity_id and ent_reg.async_get(self.entity_id):
+            ent_reg.async_update_entity(
+                self.entity_id,
+                entity_category=None,
+                original_name=self._attr_name,
+            )
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
