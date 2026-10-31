@@ -10,6 +10,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
@@ -30,7 +31,7 @@ class SystemProblemBinarySensor(BinarySensorEntity):
     """Binary sensor that turns ON (Problem) when any configured sensor or switch is unavailable."""
 
     _attr_has_entity_name = True
-    _attr_name = "Problema Sensori"
+    _attr_name = "\u00a0Problema Sensori"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -41,6 +42,13 @@ class SystemProblemBinarySensor(BinarySensorEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        ent_reg = er.async_get(self.hass)
+        if self.entity_id and ent_reg.async_get(self.entity_id):
+            ent_reg.async_update_entity(
+                self.entity_id,
+                entity_category=EntityCategory.DIAGNOSTIC,
+                original_name=self._attr_name,
+            )
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
