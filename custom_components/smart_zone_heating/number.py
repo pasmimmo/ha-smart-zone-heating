@@ -6,10 +6,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfPower, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DEFAULT_HYSTERESIS, DOMAIN
-from .coordinator import SmartZoneHeatingCoordinator
+from .const import CONF_COOLDOWN_MINUTES, CONF_POWER_THRESHOLD_WATT, DOMAIN
+from .coordinator import CONF_HYSTERESIS, SmartZoneHeatingCoordinator
 
 
 async def async_setup_entry(
@@ -28,7 +27,7 @@ async def async_setup_entry(
     )
 
 
-class HysteresisNumber(NumberEntity, RestoreEntity):
+class HysteresisNumber(NumberEntity):
     """Number entity to configure thermostat hysteresis."""
 
     _attr_has_entity_name = True
@@ -48,13 +47,6 @@ class HysteresisNumber(NumberEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ("unknown", "unavailable"):
-            try:
-                self.coordinator.hysteresis = float(last_state.state)
-            except (ValueError, TypeError):
-                self.coordinator.hysteresis = DEFAULT_HYSTERESIS
-
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -69,10 +61,11 @@ class HysteresisNumber(NumberEntity, RestoreEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         self.coordinator.hysteresis = float(value)
+        self.coordinator.persist_config_option(CONF_HYSTERESIS, self.coordinator.hysteresis)
         await self.coordinator.async_evaluate()
 
 
-class CooldownMinutesNumber(NumberEntity, RestoreEntity):
+class CooldownMinutesNumber(NumberEntity):
     """Number entity to configure heat dissipation duration in minutes."""
 
     _attr_has_entity_name = True
@@ -92,13 +85,6 @@ class CooldownMinutesNumber(NumberEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ("unknown", "unavailable"):
-            try:
-                self.coordinator.cooldown_minutes = int(float(last_state.state))
-            except (ValueError, TypeError):
-                pass
-
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -113,10 +99,13 @@ class CooldownMinutesNumber(NumberEntity, RestoreEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         self.coordinator.cooldown_minutes = int(value)
+        self.coordinator.persist_config_option(
+            CONF_COOLDOWN_MINUTES, self.coordinator.cooldown_minutes
+        )
         await self.coordinator.async_evaluate()
 
 
-class PowerThresholdNumber(NumberEntity, RestoreEntity):
+class PowerThresholdNumber(NumberEntity):
     """Number entity to configure minimum power threshold in Watts for manual ignition safety."""
 
     _attr_has_entity_name = True
@@ -136,13 +125,6 @@ class PowerThresholdNumber(NumberEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ("unknown", "unavailable"):
-            try:
-                self.coordinator.power_threshold_watt = float(last_state.state)
-            except (ValueError, TypeError):
-                pass
-
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -157,5 +139,7 @@ class PowerThresholdNumber(NumberEntity, RestoreEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         self.coordinator.power_threshold_watt = float(value)
+        self.coordinator.persist_config_option(
+            CONF_POWER_THRESHOLD_WATT, self.coordinator.power_threshold_watt
+        )
         await self.coordinator.async_evaluate()
-

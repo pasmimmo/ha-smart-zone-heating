@@ -8,10 +8,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import CONF_DAY_START_TIME, CONF_NIGHT_START_TIME, DOMAIN
 from .coordinator import SmartZoneHeatingCoordinator
 
 
@@ -30,7 +28,7 @@ async def async_setup_entry(
     )
 
 
-class DayStartTimeEntity(TimeEntity, RestoreEntity):
+class DayStartTimeEntity(TimeEntity):
     """Time entity for when Day mode starts."""
 
     _attr_has_entity_name = True
@@ -45,12 +43,6 @@ class DayStartTimeEntity(TimeEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ("unknown", "unavailable"):
-            parsed = dt_util.parse_time(last_state.state)
-            if parsed is not None:
-                self.coordinator.day_start_time = parsed
-
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -65,11 +57,12 @@ class DayStartTimeEntity(TimeEntity, RestoreEntity):
 
     async def async_set_value(self, value: time) -> None:
         self.coordinator.day_start_time = value
+        self.coordinator.persist_config_option(CONF_DAY_START_TIME, value.isoformat())
         self.coordinator._last_scheduled_period = None
         await self.coordinator.async_evaluate()
 
 
-class NightStartTimeEntity(TimeEntity, RestoreEntity):
+class NightStartTimeEntity(TimeEntity):
     """Time entity for when Night mode starts."""
 
     _attr_has_entity_name = True
@@ -84,12 +77,6 @@ class NightStartTimeEntity(TimeEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ("unknown", "unavailable"):
-            parsed = dt_util.parse_time(last_state.state)
-            if parsed is not None:
-                self.coordinator.night_start_time = parsed
-
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -104,6 +91,6 @@ class NightStartTimeEntity(TimeEntity, RestoreEntity):
 
     async def async_set_value(self, value: time) -> None:
         self.coordinator.night_start_time = value
+        self.coordinator.persist_config_option(CONF_NIGHT_START_TIME, value.isoformat())
         self.coordinator._last_scheduled_period = None
         await self.coordinator.async_evaluate()
-

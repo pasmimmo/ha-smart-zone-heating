@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN
+from .const import CONF_SCHEDULE_ENABLED, DOMAIN, NOTIFY_LEVEL_DEBUG
 from .coordinator import SmartZoneHeatingCoordinator
 
 
@@ -31,7 +31,7 @@ async def async_setup_entry(
     )
 
 
-class MasterHeatingSwitch(SwitchEntity, RestoreEntity):
+class MasterHeatingSwitch(SwitchEntity):
     """Master switch to enable/disable all zone thermostats (HEAT / OFF)."""
 
     _attr_has_entity_name = True
@@ -80,7 +80,7 @@ class GlobalAwaySwitch(SwitchEntity, RestoreEntity):
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
         if last_state and last_state.state == "on":
-            await self.coordinator.async_set_global_away(True)
+            self.coordinator.global_away_mode = True
 
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
@@ -101,7 +101,7 @@ class GlobalAwaySwitch(SwitchEntity, RestoreEntity):
         await self.coordinator.async_set_global_away(False, context=self._context)
 
 
-class ScheduleEnabledSwitch(SwitchEntity, RestoreEntity):
+class ScheduleEnabledSwitch(SwitchEntity):
     """Switch under Configuration to enable/disable automatic Day/Night hourly schedule."""
 
     _attr_has_entity_name = True
@@ -116,10 +116,6 @@ class ScheduleEnabledSwitch(SwitchEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
-        if last_state and last_state.state in ("on", "off"):
-            self.coordinator.schedule_enabled = last_state.state == "on"
-
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -134,17 +130,25 @@ class ScheduleEnabledSwitch(SwitchEntity, RestoreEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         self.coordinator.schedule_enabled = True
+        self.coordinator.persist_config_option(CONF_SCHEDULE_ENABLED, True)
         self.coordinator._last_scheduled_period = None
         self.coordinator._last_trigger_context = self._context
+        await self.coordinator._async_notify(
+            NOTIFY_LEVEL_DEBUG, "Cambio automatico orario Giorno/Notte abilitato."
+        )
         await self.coordinator.async_evaluate()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self.coordinator.schedule_enabled = False
+        self.coordinator.persist_config_option(CONF_SCHEDULE_ENABLED, False)
         self.coordinator._last_trigger_context = self._context
+        await self.coordinator._async_notify(
+            NOTIFY_LEVEL_DEBUG, "Cambio automatico orario Giorno/Notte disabilitato."
+        )
         await self.coordinator.async_evaluate()
 
 
-class ExclusiveControlSwitch(SwitchEntity, RestoreEntity):
+class ExclusiveControlSwitch(SwitchEntity):
     """Switch under Configuration to enforce exclusive control and hide physical switches."""
 
     _attr_has_entity_name = True
@@ -159,11 +163,6 @@ class ExclusiveControlSwitch(SwitchEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
-        if last_state and last_state.state in ("on", "off"):
-            self.coordinator.exclusive_control = last_state.state == "on"
-            await self.coordinator.async_apply_exclusive_control_visibility()
-
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )

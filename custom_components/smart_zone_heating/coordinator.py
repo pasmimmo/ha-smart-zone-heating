@@ -86,6 +86,8 @@ _LEVEL_PRIORITY = {
     NOTIFY_LEVEL_DEBUG: 1,
 }
 
+CONF_HYSTERESIS = "hysteresis"
+
 
 def _parse_time(val: str | time | None, default_str: str) -> time:
     """Parse a time string HH:MM or HH:MM:SS into a datetime.time object."""
@@ -136,13 +138,14 @@ class SmartZoneHeatingCoordinator:
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
+        self._updating_from_entity: bool = False
         data = {**entry.data, **entry.options}
 
         self.system_name: str = data.get(CONF_SYSTEM_NAME, "Riscaldamento")
         self.heater_entity: str = data[CONF_HEATER_ENTITY]
         self.master_enabled: bool = bool(data.get(CONF_MASTER_ENABLED, True))
         self.exclusive_control: bool = bool(data.get(CONF_EXCLUSIVE_CONTROL, False))
-        self.hysteresis: float = DEFAULT_HYSTERESIS
+        self.hysteresis: float = float(data.get(CONF_HYSTERESIS, DEFAULT_HYSTERESIS))
         self.system_state: str = STATE_IDLE
 
         # Schedule settings (Day / Night / Away)
@@ -234,7 +237,22 @@ class SmartZoneHeatingCoordinator:
         )
 
     @callback
-    def async_apply_exclusive_control_visibility(self, force_unhide: bool = False) -> None:
+    def persist_config_option(self, key: str, value: Any) -> None:
+        """Persist a configuration option into entry.data / entry.options without triggering a full reload."""
+        self._updating_from_entity = True
+        try:
+            new_data = {**self.entry.data, key: value}
+            new_options = {**self.entry.options}
+            if key in new_options:
+                new_options[key] = value
+            self.hass.config_entries.async_update_entry(
+                self.entry, data=new_data, options=new_options
+            )
+        finally:
+            self._updating_from_entity = False
+
+    @callback
+    def apply_exclusive_control_visibility(self, force_unhide: bool = False) -> None:
         """Hide or unhide managed physical switch entities in Entity Registry based on exclusive_control."""
         ent_reg = er.async_get(self.hass)
         managed_switches = {self.heater_entity} | {
@@ -260,11 +278,20 @@ class SmartZoneHeatingCoordinator:
     ) -> None:
         """Toggle exclusive control mode, update switch visibility, and evaluate."""
         self.exclusive_control = enabled
+        self.persist_config_option(CONF_EXCLUSIVE_CONTROL, enabled)
         self._last_trigger_context = context
-        self.async_apply_exclusive_control_visibility()
+        self.apply_exclusive_control_visibility()
         # Reset edge memory when enabling exclusive control so switches are immediately aligned
         if enabled:
             self._last_desired_switch_state.clear()
+
+        msg = (
+            "Controllo Esclusivo ATTIVATO: gli switch fisici sono nascosti e bloccati."
+            if enabled
+            else "Controllo Esclusivo DISATTIVATO: gli switch fisici sono visibili e liberi da blocco continuo."
+        )
+        self._fire_logbook_entry(entity_id=None, message=msg, context=context)
+        await self._async_notify(NOTIFY_LEVEL_DEBUG, msg)
         await self.async_evaluate()
 
     async def async_set_master_enabled(
@@ -272,16 +299,19 @@ class SmartZoneHeatingCoordinator:
     ) -> None:
         """Turn all zone thermostats ON (HEAT) or OFF via the master switch."""
         self.master_enabled = enabled
+        self.persist_config_option(CONF_MASTER_ENABLED, enabled)
         self._last_trigger_context = context
         for zone in self.zones.values():
             zone.hvac_mode_enabled = enabled
 
         state_str = "HEAT (Accesi)" if enabled else "OFF (Spenti)"
+        msg = f"Interruttore generale Impianto Abilitato impostato su {'ON' if enabled else 'OFF'} → tutti i termostati di zona impostati su {state_str}."
         self._fire_logbook_entry(
             entity_id=None,
-            message=f"Interruttore generale Impianto Abilitato impostato su {'ON' if enabled else 'OFF'} → tutti i termostati di zona impostati su {state_str}",
+            message=msg,
             context=context,
         )
+        await self._async_notify(NOTIFY_LEVEL_DEBUG, msg)
         await self.async_evaluate()
 
     def _fire_logbook_entry(
@@ -404,7 +434,7 @@ class SmartZoneHeatingCoordinator:
 
     async def async_start(self) -> None:
         """Start tracking entities, apply exclusive control visibility, and evaluate initial state."""
-        self.async_apply_exclusive_control_visibility()
+        self.apply_exclusive_control_visibility()
         self._resubscribe_listeners()
         self._unsub_periodic_tick = async_track_time_interval(
             self.hass,
@@ -516,6 +546,11 @@ class SmartZoneHeatingCoordinator:
         if not zone:
             return
         zone.temp_sensor = sensor_entity_id
+        zones_cfg = [dict(z) for z in self.entry.data.get(CONF_ZONES, [])]
+        for z_dict in zones_cfg:
+            if z_dict.get(CONF_ZONE_ID) == zone_id:
+                z_dict[CONF_TEMP_SENSOR] = sensor_entity_id
+        self.persist_config_option(CONF_ZONES, zones_cfg)
         self._last_trigger_context = context
         self._resubscribe_listeners()
         await self.async_evaluate()
@@ -820,12 +855,18 @@ class SmartZoneHeatingCoordinator:
         else:
             heater_reason = "Nessuna zona richiede calore"
 
-        await self._async_command_switch(
+        heater_changed = await self._async_command_switch(
             entity_id=self.heater_entity,
             turn_on=any_heating,
             reason=heater_reason,
             trigger_context=trigger_ctx,
         )
+        if heater_changed:
+            h_label = "ACCESO" if any_heating else "SPENTO"
+            await self._async_notify(
+                NOTIFY_LEVEL_DEBUG,
+                f"Generatore di calore ({self.heater_entity}): {h_label} ({heater_reason}).",
+            )
 
         # 8. Update Problem detection, send ERROR notifications on unavailability changes, & set System State
         current_unavail_set = set(unavailable)
