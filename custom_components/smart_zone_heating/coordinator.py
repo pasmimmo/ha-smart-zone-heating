@@ -255,7 +255,7 @@ class SmartZoneHeatingCoordinator:
             name=self.system_name,
             manufacturer="Smart Zone Heating",
             model="Multi-Zone Heating Controller",
-            sw_version="0.9.0",
+            sw_version="1.0.0",
         )
 
     @callback

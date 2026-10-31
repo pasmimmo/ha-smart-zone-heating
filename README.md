@@ -1,7 +1,7 @@
 # <img src="custom_components/smart_zone_heating/brand/icon.png" width="48" height="48" align="absmiddle" alt="Smart Zone Heating Icon" /> Smart Zone Heating for Home Assistant
 
 [![HACS Validation](https://img.shields.io/github/actions/workflow/status/pasmimmo/ha-smart-zone-heating/validate.yml?label=HACS%20%26%20Hassfest)](https://github.com/pasmimmo/ha-smart-zone-heating/actions)
-[![Version](https://img.shields.io/badge/version-0.9.0-blue.svg)](https://github.com/pasmimmo/ha-smart-zone-heating/releases)
+[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)](https://github.com/pasmimmo/ha-smart-zone-heating/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-41BDF5.svg)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
