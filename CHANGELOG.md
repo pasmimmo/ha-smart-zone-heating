@@ -2,7 +2,7 @@
 
 All notable changes to **Smart Zone Heating** are documented in this file.
 
-## [0.9.0] - 2026-10-31
+## [1.0.0] - 2026-10-31
 
 ### Added
 - **Multi-Zone Native Thermostats (`climate`)**: Support for $1 \dots 10$ independent thermal zones with `Heat`/`Off` modes and `Day`, `Night`, and `Away` presets.
