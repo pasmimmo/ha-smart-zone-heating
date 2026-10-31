@@ -2,57 +2,139 @@
   "config": {
     "step": {
       "user": {
-        "title": "Step 1: Thermostats & Zones Configuration",
-        "description": "Set the system name, number of thermal zones, thermostat hysteresis, and whether to enable automatic Day / Night switching.",
+        "title": "Passo 1: Configurazione Termostati e Zone",
+        "description": "Imposta il nome dell'impianto, il numero di zone termiche, l'isteresi e il ciclo automatico Giorno/Notte.",
         "data": {
-          "system_name": "System name",
-          "zone_count": "How many thermal zones?",
-          "hysteresis": "Thermostat Hysteresis (°C)",
-          "schedule_enabled": "Enable automatic Day / Night hourly schedule"
+          "system_name": "Nome dell'impianto",
+          "zone_count": "Numero di zone termiche",
+          "hysteresis": "Isteresi termostati (°C)",
+          "schedule_enabled": "Abilita ciclo orario Giorno / Notte"
+        },
+        "data_description": {
+          "system_name": "Nome identificativo del dispositivo in Home Assistant.",
+          "zone_count": "Quante zone o piani (valvole indipendenti) vuoi gestire.",
+          "hysteresis": "Tolleranza in °C prima di accendere o spegnere il riscaldamento (default 0.3 °C).",
+          "schedule_enabled": "Se attivo, nel passo successivo potrai impostare gli orari di cambio Giorno e Notte."
         }
       },
       "schedule_hours": {
-        "title": "Step 1b: Day / Night Schedule Hours",
-        "description": "Configure the start times for Day mode and Night mode.",
+        "title": "Passo 1b: Orari Ciclo Giorno / Notte",
+        "description": "Imposta gli orari di inizio per la fascia Giorno e la fascia Notte.",
         "data": {
-          "day_start_time": "Day mode start time",
-          "night_start_time": "Night mode start time"
+          "day_start_time": "Ora inizio Giorno",
+          "night_start_time": "Ora inizio Notte"
+        },
+        "data_description": {
+          "day_start_time": "Orario in cui i termostati passano automaticamente al profilo Giorno.",
+          "night_start_time": "Orario in cui i termostati passano automaticamente al profilo Notte."
         }
       },
       "zone": {
-        "title": "Step 2: Zone Thermostat {zone_num} of {zone_total}",
-        "description": "Configure the zone valve, temperature sensor, and target temperatures for Day, Night, and Away modes.",
+        "title": "Passo 2: Termostato Zona {zone_num} di {zone_total}",
+        "description": "Configura la valvola di zona, il sensore di temperatura e le temperature target dei 3 profili.",
         "data": {
-          "zone_name": "Zone name (e.g. Day Zone, Night Zone, Floor 1)",
-          "valve_entity": "Zone valve switch",
-          "temp_sensor": "Temperature sensor",
-          "temp_day": "Day mode temperature (°C)",
-          "temp_night": "Night mode temperature (°C)",
-          "temp_away": "Away mode temperature (°C)"
+          "zone_name": "Nome della zona",
+          "valve_entity": "Switch valvola di zona",
+          "temp_sensor": "Sensore di temperatura",
+          "temp_day": "Temperatura Giorno (°C)",
+          "temp_night": "Temperatura Notte (°C)",
+          "temp_away": "Temperatura Fuori Casa (°C)"
+        },
+        "data_description": {
+          "zone_name": "Es. Piano 1, Piano 2, Zona Giorno o Zona Notte.",
+          "valve_entity": "Lo switch che apre e chiude l'elettrovalvola di questa zona.",
+          "temp_sensor": "Il termometro che rileva la temperatura ambiente di questa zona.",
+          "temp_day": "Temperatura target quando è attivo il profilo Giorno.",
+          "temp_night": "Temperatura target quando è attivo il profilo Notte.",
+          "temp_away": "Temperatura target ridotta quando è attiva la modalità Fuori Casa."
         }
       },
       "heater_and_safety": {
-        "title": "Step 3: Heat Generator, Safety & Notifications",
-        "description": "When a power sensor (Watts) is configured for the heat generator, it decides when to close the cooldown valve (below threshold W), using the timer as a fallback if the sensor becomes unavailable.",
+        "title": "Impostazioni Avanzate — 1. Generatore e Smaltimento",
+        "description": "Configura il generatore di calore comune, il controllo esclusivo sugli switch e lo smaltimento del calore residuo.",
         "data": {
-          "heater_entity": "Heat Generator switch (dry-contact / relay)",
-          "master_enabled": "Master switch System Enabled",
-          "exclusive_control": "Exclusive Control (hides physical switches and reverts manual toggles)",
-          "power_sensor": "Heat Generator power sensor in Watts (optional)",
-          "power_threshold_watt": "Minimum power threshold (Watts) for cooldown & manual ignition",
-          "power_grace_seconds": "Initial confirmation / grace time (seconds)",
-          "cooldown_minutes": "Fallback heat dissipation timer (minutes, used if power sensor is unavailable)",
-          "cooldown_zone_id": "Zone valve to open for heat dissipation / safety",
-          "use_separate_manual_zone": "Use another valve for manual ignition",
-          "notify_service": "Optional notification service (e.g. notify.mobile_app_...)",
-          "notify_level": "Notification level (Off / Error / Warning / Debug)"
+          "heater_entity": "Generatore di calore comune",
+          "exclusive_control": "Controllo esclusivo degli switch",
+          "cooldown_enabled": "Gestisci smaltimento calore"
+        },
+        "data_description": {
+          "heater_entity": "Seleziona lo switch (contatto pulito / relè) che comanda l'accensione del generatore di calore.",
+          "exclusive_control": "Se attivo, nasconde gli switch fisici in Home Assistant e annulla eventuali modifiche manuali non conformi.",
+          "cooldown_enabled": "Se attivo, mantiene aperta una valvola di zona dopo lo spegnimento del generatore per dissipare il calore residuo."
+        }
+      },
+      "cooldown": {
+        "title": "Impostazioni Avanzate — 2. Smaltimento Calore",
+        "description": "Scegli la valvola da aprire in fase di smaltimento, se monitorare i Watt del generatore e il tempo di chiusura.",
+        "data": {
+          "cooldown_zone_id": "Valvola di smaltimento calore",
+          "use_power_sensor": "Usa dispositivo di monitoraggio Watt per capire lo stato di funzionamento",
+          "cooldown_minutes": "Temporizzazione chiusura (minuti)"
+        },
+        "data_description": {
+          "cooldown_zone_id": "Quale valvola di zona mantenere aperta per far circolare l'acqua calda residua dopo lo spegnimento.",
+          "use_power_sensor": "Se attivo, usa un sensore in Watt per chiudere la valvola non appena il generatore termina il ciclo di arresto.",
+          "cooldown_minutes": "Durata apertura valvola in minuti (se il monitoraggio Watt è attivo, viene usato come fallback di sicurezza)."
+        }
+      },
+      "power_sensor": {
+        "title": "Impostazioni Avanzate — 2.1 Monitoraggio Watt",
+        "description": "Configura il sensore di potenza e la soglia per determinare quando l'impianto è in funzione.",
+        "data": {
+          "power_sensor": "Selettore sensore potenza (Watt)",
+          "power_threshold_watt": "Soglia funzionamento in Watt",
+          "power_grace_seconds": "Attesa stabilizzazione lettura (secondi)"
+        },
+        "data_description": {
+          "power_sensor": "Seleziona il sensore in Watt (es. presa smart) che misura l'assorbimento elettrico del generatore.",
+          "power_threshold_watt": "Superiore a questa soglia in Watt l'impianto è considerato attivo; sotto questa soglia è considerato spento.",
+          "power_grace_seconds": "Secondi di attesa iniziale dopo lo spegnimento prima di controllare i Watt, per ignorare ritardi del sensore."
+        }
+      },
+      "manual_safety": {
+        "title": "Impostazioni Avanzate — 3. Rilevamento Accensione Manuale",
+        "description": "Rileva tramite il sensore Watt se il generatore viene acceso manualmente mentre i termostati sono spenti.",
+        "data": {
+          "manual_safety_enabled": "Attiva rilevamento accensione manuale",
+          "use_separate_manual_zone": "Usa una valvola diversa per l'accensione manuale"
+        },
+        "data_description": {
+          "manual_safety_enabled": "Se il consumo supera la soglia in Watt a termostati spenti, apre automaticamente una valvola di sicurezza.",
+          "use_separate_manual_zone": "Se disattivato usa la stessa valvola dello smaltimento calore; se attivo potrai scegliere una valvola dedicata."
+        }
+      },
+      "manual_safety_no_watt": {
+        "title": "Impostazioni Avanzate — 3. Rilevamento Accensione Manuale",
+        "description": "⚠️ **Sensore Watt richiesto:** Non avendo attivato un sensore di potenza in Watt nello smaltimento calore, per rilevare l'accensione manuale è necessario configurare un sensore in Watt.",
+        "data": {
+          "manual_safety_enabled": "Attiva rilevamento accensione manuale (configura sensore Watt)"
+        },
+        "data_description": {
+          "manual_safety_enabled": "Attiva se vuoi selezionare nel passo successivo il sensore in Watt e la valvola di sicurezza; lascia disattivato per terminare."
+        }
+      },
+      "manual_watt_setup": {
+        "title": "Impostazioni Avanzate — 3.1 Sensore Watt e Valvola Accensione Manuale",
+        "description": "Seleziona il sensore in Watt richiesto per rilevare l'accensione manuale e la valvola di sicurezza da aprire.",
+        "data": {
+          "power_sensor": "Selettore sensore potenza (Watt)",
+          "power_threshold_watt": "Soglia funzionamento in Watt",
+          "manual_safety_zone_id": "Valvola di sicurezza accensione manuale"
+        },
+        "data_description": {
+          "power_sensor": "Sensore in Watt che misura l'assorbimento elettrico del generatore di calore.",
+          "power_threshold_watt": "Superiore a questa soglia in Watt a termostati spenti, l'impianto viene considerato acceso manualmente.",
+          "manual_safety_zone_id": "Quale valvola di zona aprire automaticamente quando viene rilevata un'accensione manuale."
         }
       },
       "manual_zone": {
-        "title": "Step 4: Manual Ignition Safety Valve",
-        "description": "Select which zone valve to open when heat generator power consumption exceeds the threshold while idle.",
+        "title": "Impostazioni Avanzate — 3.1 Valvola Accensione Manuale",
+        "description": "Scegli quale valvola aprire quando viene rilevata un'accensione manuale del generatore.",
         "data": {
-          "manual_safety_zone_id": "Zone valve to open on manual ignition (> threshold W)"
+          "manual_safety_zone_id": "Valvola di sicurezza accensione manuale"
+        },
+        "data_description": {
+          "manual_safety_zone_id": "Quale valvola di zona aprire quando l'assorbimento supera la soglia in Watt a termostati spenti."
         }
       }
     }
@@ -60,64 +142,91 @@
   "options": {
     "step": {
       "init": {
-        "title": "Smart Zone Heating Configuration",
-        "description": "Choose which configuration section to edit:",
-        "menu_options": {
-          "thermostats": "1. Thermostats & Day/Night Schedule",
-          "safety": "2. Heat Generator, Exclusive Control & Safety",
-          "notifications": "3. Notifications & Debug Level"
+        "title": "Impostazioni Avanzate — 1. Generatore e Smaltimento",
+        "description": "Configura il generatore di calore comune, il controllo esclusivo sugli switch e lo smaltimento del calore residuo.",
+        "data": {
+          "heater_entity": "Generatore di calore comune",
+          "exclusive_control": "Controllo esclusivo degli switch",
+          "cooldown_enabled": "Gestisci smaltimento calore"
+        },
+        "data_description": {
+          "heater_entity": "Seleziona lo switch (contatto pulito / relè) che comanda l'accensione del generatore di calore.",
+          "exclusive_control": "Se attivo, nasconde gli switch fisici in Home Assistant e annulla eventuali modifiche manuali non conformi.",
+          "cooldown_enabled": "Se attivo, mantiene aperta una valvola di zona dopo lo spegnimento del generatore per dissipare il calore residuo."
         }
       },
-      "thermostats": {
-        "title": "Thermostats & Schedule Settings",
-        "description": "Configure thermostat hysteresis and automatic Day / Night schedule switching (if enabled, you will configure the start hours in the next step).",
+      "cooldown": {
+        "title": "Impostazioni Avanzate — 2. Smaltimento Calore",
+        "description": "Scegli la valvola da aprire in fase di smaltimento, se monitorare i Watt del generatore e il tempo di chiusura.",
         "data": {
-          "hysteresis": "Thermostat Hysteresis (°C)",
-          "schedule_enabled": "Enable automatic Day / Night hourly schedule"
+          "cooldown_zone_id": "Valvola di smaltimento calore",
+          "use_power_sensor": "Usa dispositivo di monitoraggio Watt per capire lo stato di funzionamento",
+          "cooldown_minutes": "Temporizzazione chiusura (minuti)"
+        },
+        "data_description": {
+          "cooldown_zone_id": "Quale valvola di zona mantenere aperta per far circolare l'acqua calda residua dopo lo spegnimento.",
+          "use_power_sensor": "Se attivo, usa un sensore in Watt per chiudere la valvola non appena il generatore termina il ciclo di arresto.",
+          "cooldown_minutes": "Durata apertura valvola in minuti (se il monitoraggio Watt è attivo, viene usato come fallback di sicurezza)."
         }
       },
-      "schedule_hours": {
-        "title": "Day / Night Schedule Hours",
-        "description": "Configure the start times for Day mode and Night mode.",
+      "power_sensor": {
+        "title": "Impostazioni Avanzate — 2.1 Monitoraggio Watt",
+        "description": "Configura il sensore di potenza e la soglia per determinare quando l'impianto è in funzione.",
         "data": {
-          "day_start_time": "Day mode start time",
-          "night_start_time": "Night mode start time"
+          "power_sensor": "Selettore sensore potenza (Watt)",
+          "power_threshold_watt": "Soglia funzionamento in Watt",
+          "power_grace_seconds": "Attesa stabilizzazione lettura (secondi)"
+        },
+        "data_description": {
+          "power_sensor": "Seleziona il sensore in Watt (es. presa smart) che misura l'assorbimento elettrico del generatore.",
+          "power_threshold_watt": "Superiore a questa soglia in Watt l'impianto è considerato attivo; sotto questa soglia è considerato spento.",
+          "power_grace_seconds": "Secondi di attesa iniziale dopo lo spegnimento prima di controllare i Watt, per ignorare ritardi del sensore."
         }
       },
-      "safety": {
-        "title": "Heat Generator, Exclusive Control & Safety",
-        "description": "Configure heat generator switch, Exclusive Control over physical switches, and cooldown / manual ignition safety settings.",
+      "manual_safety": {
+        "title": "Impostazioni Avanzate — 3. Rilevamento Accensione Manuale",
+        "description": "Rileva tramite il sensore Watt se il generatore viene acceso manualmente mentre i termostati sono spenti.",
         "data": {
-          "heater_entity": "Heat Generator switch (dry-contact / relay)",
-          "master_enabled": "Master switch System Enabled",
-          "exclusive_control": "Exclusive Control (hides physical switches and reverts manual toggles)",
-          "power_sensor": "Heat Generator power sensor in Watts (optional)",
-          "power_threshold_watt": "Minimum power threshold (Watts) for cooldown & manual ignition",
-          "power_grace_seconds": "Initial confirmation / grace time (seconds)",
-          "cooldown_minutes": "Fallback heat dissipation timer (minutes, used if power sensor is unavailable)",
-          "cooldown_zone_id": "Zone valve to open for heat dissipation / safety",
-          "use_separate_manual_zone": "Use another valve for manual ignition"
+          "manual_safety_enabled": "Attiva rilevamento accensione manuale",
+          "use_separate_manual_zone": "Usa una valvola diversa per l'accensione manuale"
+        },
+        "data_description": {
+          "manual_safety_enabled": "Se il consumo supera la soglia in Watt a termostati spenti, apre automaticamente una valvola di sicurezza.",
+          "use_separate_manual_zone": "Se disattivato usa la stessa valvola dello smaltimento calore; se attivo potrai scegliere una valvola dedicata."
+        }
+      },
+      "manual_safety_no_watt": {
+        "title": "Impostazioni Avanzate — 3. Rilevamento Accensione Manuale",
+        "description": "⚠️ **Sensore Watt richiesto:** Non avendo attivato un sensore di potenza in Watt nello smaltimento calore, per rilevare l'accensione manuale è necessario configurare un sensore in Watt.",
+        "data": {
+          "manual_safety_enabled": "Attiva rilevamento accensione manuale (configura sensore Watt)"
+        },
+        "data_description": {
+          "manual_safety_enabled": "Attiva se vuoi selezionare nel passo successivo il sensore in Watt e la valvola di sicurezza; lascia disattivato per terminare."
+        }
+      },
+      "manual_watt_setup": {
+        "title": "Impostazioni Avanzate — 3.1 Sensore Watt e Valvola Accensione Manuale",
+        "description": "Seleziona il sensore in Watt richiesto per rilevare l'accensione manuale e la valvola di sicurezza da aprire.",
+        "data": {
+          "power_sensor": "Selettore sensore potenza (Watt)",
+          "power_threshold_watt": "Soglia funzionamento in Watt",
+          "manual_safety_zone_id": "Valvola di sicurezza accensione manuale"
+        },
+        "data_description": {
+          "power_sensor": "Sensore in Watt che misura l'assorbimento elettrico del generatore di calore.",
+          "power_threshold_watt": "Superiore a questa soglia in Watt a termostati spenti, l'impianto viene considerato acceso manualmente.",
+          "manual_safety_zone_id": "Quale valvola di zona aprire automaticamente quando viene rilevata un'accensione manuale."
         }
       },
       "manual_zone": {
-        "title": "Manual Ignition Safety Valve",
-        "description": "Select which zone valve to open when heat generator power consumption exceeds the threshold while idle.",
+        "title": "Impostazioni Avanzate — 3.1 Valvola Accensione Manuale",
+        "description": "Scegli quale valvola aprire quando viene rilevata un'accensione manuale del generatore.",
         "data": {
-          "manual_safety_zone_id": "Zone valve to open on manual ignition (> threshold W)"
-        }
-      },
-      "notifications": {
-        "title": "Notification Settings",
-        "description": "Select notification service (if enabled, you will choose the verbosity level in the next step).",
-        "data": {
-          "notify_service": "Notification service (e.g. notify.mobile_app_... or notify.persistent_notification)"
-        }
-      },
-      "notify_level": {
-        "title": "Notification Verbosity Level",
-        "description": "Select which events should trigger a notification.",
-        "data": {
-          "notify_level": "Notification level (Off / Error / Warning / Debug)"
+          "manual_safety_zone_id": "Valvola di sicurezza accensione manuale"
+        },
+        "data_description": {
+          "manual_safety_zone_id": "Quale valvola di zona aprire quando l'assorbimento supera la soglia in Watt a termostati spenti."
         }
       }
     }
@@ -128,9 +237,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "day": "Day",
-              "night": "Night",
-              "away": "Away"
+              "day": "Giorno",
+              "night": "Notte",
+              "away": "Fuori Casa"
             }
           }
         }
@@ -139,10 +248,10 @@
     "select": {
       "notify_level": {
         "state": {
-          "off": "Off",
-          "error": "Errors Only",
-          "warning": "Warnings + Errors",
-          "debug": "All Events (Debug)"
+          "off": "Disabilitate (Off)",
+          "error": "Solo Errori (Error)",
+          "warning": "Warning + Errori",
+          "debug": "Tutti gli eventi (Debug)"
         }
       }
     }

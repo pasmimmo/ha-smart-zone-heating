@@ -24,13 +24,16 @@ CONF_DAY_START_TIME = "day_start_time"
 CONF_NIGHT_START_TIME = "night_start_time"
 
 # Cooldown / Heat dissipation settings
+CONF_COOLDOWN_ENABLED = "cooldown_enabled"
 CONF_COOLDOWN_MINUTES = "cooldown_minutes"
 CONF_COOLDOWN_ZONE_ID = "cooldown_zone_id"
+CONF_USE_POWER_SENSOR = "use_power_sensor"
 
 # Power consumption / Manual ignition safety settings
 CONF_POWER_SENSOR = "power_sensor"
 CONF_POWER_THRESHOLD_WATT = "power_threshold_watt"
 CONF_POWER_GRACE_SECONDS = "power_grace_seconds"
+CONF_MANUAL_SAFETY_ENABLED = "manual_safety_enabled"
 CONF_USE_SEPARATE_MANUAL_ZONE = "use_separate_manual_zone"
 CONF_MANUAL_SAFETY_ZONE_ID = "manual_safety_zone_id"
 

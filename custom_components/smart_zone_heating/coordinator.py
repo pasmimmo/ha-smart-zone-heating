@@ -25,11 +25,13 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_COOLDOWN_ENABLED,
     CONF_COOLDOWN_MINUTES,
     CONF_COOLDOWN_ZONE_ID,
     CONF_DAY_START_TIME,
     CONF_EXCLUSIVE_CONTROL,
     CONF_HEATER_ENTITY,
+    CONF_MANUAL_SAFETY_ENABLED,
     CONF_MANUAL_SAFETY_ZONE_ID,
     CONF_MASTER_ENABLED,
     CONF_NIGHT_START_TIME,
@@ -45,6 +47,7 @@ from .const import (
     CONF_TEMP_DAY,
     CONF_TEMP_NIGHT,
     CONF_TEMP_SENSOR,
+    CONF_USE_POWER_SENSOR,
     CONF_USE_SEPARATE_MANUAL_ZONE,
     CONF_VALVE_ENTITY,
     CONF_ZONE_ID,
@@ -177,6 +180,9 @@ class SmartZoneHeatingCoordinator:
         first_zone_id = next(iter(self.zones), None)
 
         # Cooldown / heat dissipation settings (Power primary + Timer fallback)
+        self.cooldown_enabled: bool = bool(
+            data.get(CONF_COOLDOWN_ENABLED, True)
+        )
         self.cooldown_minutes: int = int(
             data.get(CONF_COOLDOWN_MINUTES, DEFAULT_COOLDOWN_MINUTES)
         )
@@ -189,11 +195,17 @@ class SmartZoneHeatingCoordinator:
 
         # Power consumption / manual ignition safety settings
         self.power_sensor: str | None = data.get(CONF_POWER_SENSOR) or None
+        self.use_power_sensor: bool = bool(
+            data.get(CONF_USE_POWER_SENSOR, bool(self.power_sensor))
+        )
         self.power_threshold_watt: float = float(
             data.get(CONF_POWER_THRESHOLD_WATT, DEFAULT_POWER_THRESHOLD_WATT)
         )
         self.power_grace_seconds: int = int(
             data.get(CONF_POWER_GRACE_SECONDS, DEFAULT_POWER_GRACE_SECONDS)
+        )
+        self.manual_safety_enabled: bool = bool(
+            data.get(CONF_MANUAL_SAFETY_ENABLED, bool(self.power_sensor))
         )
         self.use_separate_manual_zone: bool = bool(
             data.get(CONF_USE_SEPARATE_MANUAL_ZONE, False)
@@ -794,8 +806,13 @@ class SmartZoneHeatingCoordinator:
         # 4. Manage Cooldown (Smaltimento calore: Watt-driven primary, Timer fallback)
         now = dt_util.utcnow()
         cooldown_mode: str | None = None
+        use_watt_for_cooldown = self.use_power_sensor and power_sensor_configured
 
-        if any_heating:
+        if not self.cooldown_enabled:
+            self._was_heating = any_heating
+            if self.in_cooldown:
+                self._cancel_cooldown()
+        elif any_heating:
             self._was_heating = True
             if self.in_cooldown:
                 self._cancel_cooldown()
@@ -811,7 +828,7 @@ class SmartZoneHeatingCoordinator:
                 )
 
             if self.in_cooldown and self.cooldown_zone_id in self.zones:
-                if power_sensor_configured and power_sensor_available:
+                if use_watt_for_cooldown and power_sensor_available:
                     in_initial_grace = (
                         self.cooldown_started_at is not None
                         and (now - self.cooldown_started_at).total_seconds()
@@ -831,7 +848,7 @@ class SmartZoneHeatingCoordinator:
                         )
                 else:
                     if (
-                        power_sensor_configured
+                        use_watt_for_cooldown
                         and not power_sensor_available
                         and not self._cooldown_fallback_warned
                     ):
@@ -855,7 +872,9 @@ class SmartZoneHeatingCoordinator:
 
         # 5. Evaluate Manual Ignition Safety (> threshold W when not heating and not in cooldown)
         power_above_threshold = (
-            power_sensor_available
+            self.manual_safety_enabled
+            and power_sensor_configured
+            and power_sensor_available
             and self.current_power_watt is not None
             and self.current_power_watt >= self.power_threshold_watt
         )
