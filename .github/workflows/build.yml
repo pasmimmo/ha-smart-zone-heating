@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - develop
+      # - develop sonar oss not allow other branch than main
   pull_request:
     types: [opened, synchronize, reopened]
 jobs:
