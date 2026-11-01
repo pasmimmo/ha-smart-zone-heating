@@ -39,6 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not hass.is_running:
         async def _async_on_ha_started(_event: Any) -> None:
+            coordinator.start_post_boot_grace(30)
             await coordinator.async_evaluate()
 
         entry.async_on_unload(

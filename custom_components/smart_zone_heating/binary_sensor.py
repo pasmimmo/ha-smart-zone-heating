@@ -42,6 +42,7 @@ class SystemProblemBinarySensor(BinarySensorEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        self.coordinator.problem_binary_sensor_entity_id = self.entity_id
         ent_reg = er.async_get(self.hass)
         if self.entity_id and ent_reg.async_get(self.entity_id):
             ent_reg.async_update_entity(
@@ -55,6 +56,8 @@ class SystemProblemBinarySensor(BinarySensorEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
+        if self.coordinator.current_eval_context is not None:
+            self.async_set_context(self.coordinator.current_eval_context)
         self.async_write_ha_state()
 
     @property
@@ -65,6 +68,10 @@ class SystemProblemBinarySensor(BinarySensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "unavailable_entities": self.coordinator.unavailable_entities,
+            "dettaglio_problemi": [
+                f"{self.coordinator.friendly_entity_label(eid)} ({eid})"
+                for eid in self.coordinator.unavailable_entities
+            ],
             "power_sensor": self.coordinator.power_sensor,
             "heater_entity": self.coordinator.heater_entity,
         }

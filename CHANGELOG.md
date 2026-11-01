@@ -4,8 +4,12 @@ All notable changes to **Smart Zone Heating** are documented in this file.
 
 ## [1.0.1] - 2026-11-01
 
+### Added
+- **Expressive System State (`Stato Sistema`)**: Displays active zone names directly in the status string (e.g., `Riscaldamento: Piano 1, Piano 2`, `Smaltimento: Piano 1 (85W)`, `Accensione manuale: Piano 1 (120W)`, `Problema: TP2 - Deumidificatore`, `Inattivo (Fuori Casa)`).
+- **Startup Initialization Grace Period**: Suppresses false `Problema Sensori` / unavailability alerts during Home Assistant boot and for 30 seconds after startup so slower integrations (Wi-Fi, Zigbee) can finish initializing cleanly.
+
 ### Fixed
-- **Logbook "What happened" (*Cosa è successo*) Causality**: Preserved exact Home Assistant `Context` ID across state writes, `logbook_entry` events, and `switch.turn_on`/`turn_off` calls so the Activity Details dialog links the root cause (temperature sensor change, thermostat setpoint/mode change, or manual switch toggle).
+- **Logbook "What happened" (*Cosa è successo*) Causality**: Preserved exact Home Assistant `Context` ID across state writes, `logbook_entry` events, `Problema Sensori` transitions (`OK -> Problema` / `Problema -> OK`), and `switch.turn_on`/`turn_off` calls so the Activity Details dialog links the root cause (temperature sensor change, thermostat setpoint/mode change, unavailable sensor/switch, or manual switch toggle).
 - **False Exclusive Control Reverts on Slow Wi-Fi Switches**: Added in-flight command tracking (`_pending_switch_cmd`) and clean recovery from `unavailable`/`unknown` states so slower Wi-Fi relays (e.g., Tapo plugs taking 2–4s to report state) do not trigger false `ripristino stato (controllo esclusivo)` commands when faster Zigbee relays update first.
 
 ## [1.0.0] - 2026-10-31
