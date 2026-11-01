@@ -999,13 +999,26 @@ class SmartZoneHeatingCoordinator:
         self.unavailable_entities = sorted(current_unavail_set)
         self.problem_detected = len(self.unavailable_entities) > 0
 
-        cause_entity = (
-            newly_unavailable[0]
-            if newly_unavailable
-            else (newly_restored[0] if newly_restored else None)
-        )
+        cause_entity: str | None = None
+        if newly_unavailable:
+            cause_entity = newly_unavailable[0]
+        elif newly_restored:
+            cause_entity = newly_restored[0]
         cause_st = self.hass.states.get(cause_entity) if cause_entity else None
         return newly_unavailable, newly_restored, (cause_st.context if cause_st else None)
+
+    def _format_cooldown_state(self, cooldown_mode: str) -> str:
+        """Format Stato Sistema string for power or timer cooldown."""
+        cd_zone = self.get_zone_name(self.cooldown_zone_id) or ""
+        if cooldown_mode == "power":
+            detail = (
+                f"{self.current_power_watt:.0f}W"
+                if self.current_power_watt is not None
+                else "attesa W"
+            )
+        else:
+            detail = f"{self.cooldown_remaining_minutes} min"
+        return f"Smaltimento: {cd_zone} ({detail})"
 
     def _compute_system_state_string(
         self, any_heating: bool, cooldown_mode: str | None
@@ -1022,13 +1035,7 @@ class SmartZoneHeatingCoordinator:
             if self.problem_detected:
                 state_str = f"{state_str} (⚠️ Problema: {prob_labels})"
         elif cooldown_mode in ("power", "timer"):
-            cd_zone = self.get_zone_name(self.cooldown_zone_id) or ""
-            detail = (
-                f"{self.current_power_watt:.0f}W"
-                if cooldown_mode == "power" and self.current_power_watt is not None
-                else ("attesa W" if cooldown_mode == "power" else f"{self.cooldown_remaining_minutes} min")
-            )
-            state_str = f"Smaltimento: {cd_zone} ({detail})"
+            state_str = self._format_cooldown_state(cooldown_mode)
         elif self.manual_safety_active:
             saf_zone = self.get_zone_name(self.manual_safety_zone_id) or ""
             w_val = f"{self.current_power_watt:.0f}W" if self.current_power_watt is not None else ""
@@ -1238,6 +1245,29 @@ class SmartZoneHeatingCoordinator:
         pend_target, pend_sent_at = pending
         return pend_target == turn_on and (now - pend_sent_at).total_seconds() < 15.0
 
+    def _handle_offline_switch(self, entity_id: str) -> None:
+        """Reset switch tracking when a switch entity is unavailable."""
+        if self.exclusive_control:
+            self._last_desired_switch_state.pop(entity_id, None)
+        self._pending_switch_cmd.pop(entity_id, None)
+
+    def _build_switch_log_and_cause(
+        self,
+        turn_on: bool,
+        desired_changed: bool,
+        reason: str,
+        state_context: Context,
+        trigger_context: Context | None,
+    ) -> tuple[str, Context | None]:
+        """Build logbook message and select causal Context for a switch command."""
+        target_str = "on" if turn_on else "off"
+        if self.exclusive_control and not desired_changed:
+            return (
+                f"ripristino stato -> {target_str}, {reason} (controllo esclusivo)",
+                state_context,
+            )
+        return f"-> {target_str}, {reason}", trigger_context
+
     async def _async_command_switch(
         self,
         entity_id: str,
@@ -1248,9 +1278,7 @@ class SmartZoneHeatingCoordinator:
         """Command a switch respecting Exclusive Control, Wi-Fi switch latency, and Logbook cause attribution."""
         state_obj = self.hass.states.get(entity_id)
         if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            if self.exclusive_control:
-                self._last_desired_switch_state.pop(entity_id, None)
-            self._pending_switch_cmd.pop(entity_id, None)
+            self._handle_offline_switch(entity_id)
             return False
 
         prev_desired = self._last_desired_switch_state.get(entity_id)
@@ -1269,14 +1297,9 @@ class SmartZoneHeatingCoordinator:
             return False
 
         self._pending_switch_cmd[entity_id] = (turn_on, now)
-        target_str = "on" if turn_on else "off"
-
-        if self.exclusive_control and not desired_changed:
-            log_msg = f"ripristino stato -> {target_str}, {reason} (controllo esclusivo)"
-            cause_ctx = state_obj.context
-        else:
-            log_msg = f"-> {target_str}, {reason}"
-            cause_ctx = trigger_context
+        log_msg, cause_ctx = self._build_switch_log_and_cause(
+            turn_on, desired_changed, reason, state_obj.context, trigger_context
+        )
 
         action_context = await self.async_record_action(
             entity_id=entity_id,
