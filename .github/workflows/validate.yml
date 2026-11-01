@@ -2,12 +2,25 @@ name: Validate
 
 on:
   push:
+    branches:
+      - main
+      - develop
   pull_request:
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
 jobs:
+  code-quality:
+    name: Code Quality (Ruff & Syntax)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Run Ruff Linter
+        uses: astral-sh/ruff-action@957c3fc0df5ccf8fde1ef4fd1ba252ab2bd372fb # v3.2.0
+        with:
+          args: "check custom_components/smart_zone_heating"
+
   validate-hacs:
     name: HACS Validation
     runs-on: ubuntu-latest
@@ -25,4 +38,3 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Hassfest validation
         uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361 # master
-
