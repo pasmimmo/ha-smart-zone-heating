@@ -17,6 +17,23 @@ from .const import (
 from .coordinator import SmartZoneHeatingCoordinator, ZoneRuntimeState
 
 
+async def _async_remove_notify_level_entities(
+    active_level_entities: list[SelectEntity],
+    entry_id: str,
+    ent_reg: er.EntityRegistry,
+) -> None:
+    """Remove dynamic NotifyLevelSelect entity when notifications are set to none."""
+    while active_level_entities:
+        ent = active_level_entities.pop()
+        ent_id = ent.entity_id
+        await ent.async_remove(force_remove=True)
+        if ent_id and ent_reg.async_get(ent_id):
+            ent_reg.async_remove(ent_id)
+    uid = f"{entry_id}_notify_level_select"
+    if eid := ent_reg.async_get_entity_id("select", DOMAIN, uid):
+        ent_reg.async_remove(eid)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -58,15 +75,9 @@ async def async_setup_entry(
                 active_level_entities.append(lvl_ent)
                 async_add_entities([lvl_ent])
         else:
-            while active_level_entities:
-                ent = active_level_entities.pop()
-                ent_id = ent.entity_id
-                await ent.async_remove(force_remove=True)
-                if ent_id and ent_reg.async_get(ent_id):
-                    ent_reg.async_remove(ent_id)
-            uid = f"{entry.entry_id}_notify_level_select"
-            if eid := ent_reg.async_get_entity_id("select", DOMAIN, uid):
-                ent_reg.async_remove(eid)
+            await _async_remove_notify_level_entities(
+                active_level_entities, entry.entry_id, ent_reg
+            )
 
     await _async_sync_notify_level_entity()
 
