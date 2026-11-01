@@ -231,6 +231,9 @@ class SmartZoneHeatingCoordinator:
         self.unavailable_entities: list[str] = []
         self.problem_detected: bool = False
         self._prev_unavailable_set: set[str] = set()
+        self.problem_binary_sensor_entity_id: str | None = None
+        # Startup grace period so slow integrations (Tapo Wi-Fi, Zigbee, etc.) don't trigger false boot problems
+        self._startup_grace_until: datetime | None = dt_util.utcnow() + timedelta(seconds=45)
 
         # Track last desired switch state for non-exclusive (edge-triggered) mode
         self._last_desired_switch_state: dict[str, bool] = {}
@@ -246,6 +249,7 @@ class SmartZoneHeatingCoordinator:
         self._unsub_state_listener: Callable[[], None] | None = None
         self._unsub_cooldown_timer: Callable[[], None] | None = None
         self._unsub_grace_timer: Callable[[], None] | None = None
+        self._unsub_startup_grace: Callable[[], None] | None = None
         self._unsub_periodic_tick: Callable[[], None] | None = None
         self._evaluating: bool = False
         self._eval_pending: bool = False
@@ -522,10 +526,44 @@ class SmartZoneHeatingCoordinator:
         for listener in list(self._listeners):
             listener()
 
+    def friendly_entity_label(self, entity_id: str) -> str:
+        """Return a human-friendly name for an entity_id (falling back to entity_id)."""
+        if state := self.hass.states.get(entity_id):
+            if state.name and state.name != entity_id:
+                return state.name
+        ent_reg = er.async_get(self.hass)
+        if reg_entry := ent_reg.async_get(entity_id):
+            if reg_entry.name:
+                return reg_entry.name
+            if reg_entry.original_name:
+                return reg_entry.original_name
+        return entity_id
+
+    @callback
+    def start_post_boot_grace(self, seconds: int = 30) -> None:
+        """Start or refresh the post-boot grace timer so slow integrations can finish initializing."""
+        if self._unsub_startup_grace:
+            self._unsub_startup_grace()
+            self._unsub_startup_grace = None
+        if self._startup_grace_until is None:
+            return
+        self._startup_grace_until = dt_util.utcnow() + timedelta(seconds=seconds)
+
+        @callback
+        def _on_startup_grace_expired(_now: datetime) -> None:
+            self._unsub_startup_grace = None
+            self._startup_grace_until = None
+            self.hass.async_create_task(self.async_evaluate())
+
+        self._unsub_startup_grace = async_call_later(
+            self.hass, seconds, _on_startup_grace_expired
+        )
+
     async def async_start(self) -> None:
         """Start tracking entities, apply exclusive control visibility, and evaluate initial state."""
         self.apply_exclusive_control_visibility()
         self._resubscribe_listeners()
+        self.start_post_boot_grace(30)
         self._unsub_periodic_tick = async_track_time_interval(
             self.hass,
             self._async_periodic_tick,
@@ -565,6 +603,9 @@ class SmartZoneHeatingCoordinator:
         if self._unsub_grace_timer:
             self._unsub_grace_timer()
             self._unsub_grace_timer = None
+        if self._unsub_startup_grace:
+            self._unsub_startup_grace()
+            self._unsub_startup_grace = None
         if self._unsub_periodic_tick:
             self._unsub_periodic_tick()
             self._unsub_periodic_tick = None
@@ -911,52 +952,77 @@ class SmartZoneHeatingCoordinator:
             )
         self._was_manual_safety_active = self.manual_safety_active
 
-        # 6. Update Problem detection, System State & write entity states BEFORE commanding switches
-        # Only emit unavailability/restoration logs once Home Assistant has finished starting up
+        # 6. Update Problem detection & System State (suppressing false problems during HA startup grace)
         current_unavail_set = set(unavailable)
-        if self.hass.is_running:
+        if not current_unavail_set and self._startup_grace_until is not None:
+            # All configured entities are online -> startup initialization is complete
+            self._startup_grace_until = None
+            if self._unsub_startup_grace:
+                self._unsub_startup_grace()
+                self._unsub_startup_grace = None
+
+        in_startup_grace = (
+            not self.hass.is_running
+            or (self._startup_grace_until is not None and now < self._startup_grace_until)
+        )
+
+        newly_unavailable: list[str] = []
+        newly_restored: list[str] = []
+        problem_cause_ctx: Context | None = None
+
+        if in_startup_grace:
+            self.unavailable_entities = []
+            self.problem_detected = False
+        else:
             newly_unavailable = sorted(current_unavail_set - self._prev_unavailable_set)
             newly_restored = sorted(self._prev_unavailable_set - current_unavail_set)
             self._prev_unavailable_set = current_unavail_set
+            self.unavailable_entities = sorted(current_unavail_set)
+            self.problem_detected = len(self.unavailable_entities) > 0
 
             if newly_unavailable:
                 unavail_st = self.hass.states.get(newly_unavailable[0])
-                unavail_ctx = unavail_st.context if unavail_st is not None else trigger_ctx
-                await self.async_record_action(
-                    entity_id=newly_unavailable[0] if len(newly_unavailable) == 1 else None,
-                    action_desc=f"entità indisponibili: {', '.join(newly_unavailable)}",
-                    context=unavail_ctx,
-                    level=NOTIFY_LEVEL_ERROR,
-                )
-            if newly_restored:
+                if unavail_st is not None:
+                    problem_cause_ctx = unavail_st.context
+            elif newly_restored:
                 restored_st = self.hass.states.get(newly_restored[0])
-                restored_ctx = restored_st.context if restored_st is not None else trigger_ctx
-                await self.async_record_action(
-                    entity_id=newly_restored[0] if len(newly_restored) == 1 else None,
-                    action_desc=f"entità ripristinate: {', '.join(newly_restored)}",
-                    context=restored_ctx,
-                    level=NOTIFY_LEVEL_ERROR,
-                )
+                if restored_st is not None:
+                    problem_cause_ctx = restored_st.context
 
-        self.unavailable_entities = sorted(current_unavail_set)
-        self.problem_detected = len(self.unavailable_entities) > 0
+        if problem_cause_ctx is not None:
+            eval_ctx = problem_cause_ctx
+
+        prob_labels = ", ".join(
+            self.friendly_entity_label(eid) for eid in self.unavailable_entities
+        )
 
         if any_heating:
-            self.system_state = STATE_HEATING
+            heating_names = ", ".join(
+                z.name for z in self.zones.values() if z.requesting_heat
+            )
+            state_str = f"Riscaldamento: {heating_names}"
+            if self.problem_detected:
+                state_str = f"{state_str} (⚠️ Problema: {prob_labels})"
         elif cooldown_mode == "power":
-            w_val = f"{self.current_power_watt:.0f}W" if self.current_power_watt is not None else ""
-            self.system_state = f"{STATE_COOLDOWN_POWER} ({w_val})"
+            cd_zone = self.get_zone_name(self.cooldown_zone_id) or ""
+            w_val = f"{self.current_power_watt:.0f}W" if self.current_power_watt is not None else "attesa W"
+            state_str = f"Smaltimento: {cd_zone} ({w_val})"
         elif cooldown_mode == "timer":
+            cd_zone = self.get_zone_name(self.cooldown_zone_id) or ""
             rem = self.cooldown_remaining_minutes
-            self.system_state = f"{STATE_COOLDOWN_TIMER} ({rem} min)"
+            state_str = f"Smaltimento: {cd_zone} ({rem} min)"
         elif self.manual_safety_active:
-            self.system_state = STATE_MANUAL_SAFETY
+            saf_zone = self.get_zone_name(self.manual_safety_zone_id) or ""
+            w_val = f"{self.current_power_watt:.0f}W" if self.current_power_watt is not None else ""
+            state_str = f"Accensione manuale: {saf_zone} ({w_val})"
         elif not self.master_enabled:
-            self.system_state = STATE_DISABLED
+            state_str = STATE_DISABLED
         elif self.problem_detected:
-            self.system_state = STATE_PROBLEM
+            state_str = f"Problema: {prob_labels}"
         else:
-            self.system_state = STATE_IDLE
+            state_str = "Inattivo (Fuori Casa)" if self.global_away_mode else STATE_IDLE
+
+        self.system_state = state_str[:247] + "..." if len(state_str) > 250 else state_str
 
         # 7. Determine final valve state & forced_open_reason for each zone BEFORE notifying listeners
         valve_commands: list[tuple[ZoneRuntimeState, bool, str]] = []
@@ -991,10 +1057,47 @@ class SmartZoneHeatingCoordinator:
 
             valve_commands.append((zone, should_open_valve, valve_reason))
 
-        # Write Thermostat / System State entity rows with eval_ctx BEFORE commanding switches
+        # Write Thermostat / System State / Problem BinarySensor entity rows with eval_ctx BEFORE firing logbook entries
         self.current_eval_context = eval_ctx
         self._notify_listeners()
         self.current_eval_context = None
+
+        # Emit unavailability / restoration logbook entries on both Problema Sensori and the affected entities
+        if newly_unavailable:
+            unavail_desc = ", ".join(
+                f"{self.friendly_entity_label(eid)} ({eid})" for eid in newly_unavailable
+            )
+            await self.async_record_action(
+                entity_id=self.problem_binary_sensor_entity_id,
+                action_desc=f"rilevato problema -> indisponibile: {unavail_desc}",
+                context=eval_ctx,
+                level=NOTIFY_LEVEL_ERROR,
+            )
+            for eid in newly_unavailable:
+                st = self.hass.states.get(eid)
+                self._fire_logbook_entry(
+                    entity_id=eid,
+                    message=f"entità indisponibile ({self.friendly_entity_label(eid)})",
+                    context=st.context if st is not None else eval_ctx,
+                )
+
+        if newly_restored:
+            restored_desc = ", ".join(
+                f"{self.friendly_entity_label(eid)} ({eid})" for eid in newly_restored
+            )
+            await self.async_record_action(
+                entity_id=self.problem_binary_sensor_entity_id,
+                action_desc=f"problema risolto -> ripristinato: {restored_desc}",
+                context=eval_ctx,
+                level=NOTIFY_LEVEL_ERROR,
+            )
+            for eid in newly_restored:
+                st = self.hass.states.get(eid)
+                self._fire_logbook_entry(
+                    entity_id=eid,
+                    message=f"entità ripristinata ({self.friendly_entity_label(eid)})",
+                    context=st.context if st is not None else eval_ctx,
+                )
 
         for zone, should_open_valve, valve_reason in valve_commands:
             zone_ctx = trigger_ctx
