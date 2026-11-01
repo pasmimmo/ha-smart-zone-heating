@@ -165,10 +165,13 @@ class SmartZoneHeatingCoordinator(
         self.unavailable_entities: list[str] = []
         self.problem_detected: bool = False
         self._prev_unavailable_set: set[str] = set()
+        self._unavail_first_seen: dict[str, datetime] = {}
+        self._unavail_cause_contexts: dict[str, Context] = {}
         self.problem_binary_sensor_entity_id: str | None = None
         self._startup_grace_until: datetime | None = dt_util.utcnow() + timedelta(
             seconds=45
         )
+        self._is_stopping: bool = False
 
         # Switch command tracking
         self._last_desired_switch_state: dict[str, bool] = {}
@@ -184,6 +187,7 @@ class SmartZoneHeatingCoordinator(
         self._unsub_cooldown_timer: Callable[[], None] | None = None
         self._unsub_grace_timer: Callable[[], None] | None = None
         self._unsub_startup_grace: Callable[[], None] | None = None
+        self._unsub_unavail_confirm: Callable[[], None] | None = None
         self._unsub_periodic_tick: Callable[[], None] | None = None
         self._evaluating: bool = False
         self._eval_pending: bool = False
@@ -331,7 +335,8 @@ class SmartZoneHeatingCoordinator(
         )
 
     async def async_stop(self) -> None:  # NOSONAR
-        """Clean up listeners on unload."""
+        """Clean up listeners on unload or Home Assistant stop."""
+        self._is_stopping = True
         if self._unsub_state_listener:
             self._unsub_state_listener()
             self._unsub_state_listener = None
@@ -344,6 +349,9 @@ class SmartZoneHeatingCoordinator(
         if self._unsub_startup_grace:
             self._unsub_startup_grace()
             self._unsub_startup_grace = None
+        if self._unsub_unavail_confirm:
+            self._unsub_unavail_confirm()
+            self._unsub_unavail_confirm = None
         if self._unsub_periodic_tick:
             self._unsub_periodic_tick()
             self._unsub_periodic_tick = None
@@ -373,6 +381,8 @@ class SmartZoneHeatingCoordinator(
     @callback
     def _async_on_state_change(self, event: Event) -> None:
         """Handle state changes of tracked sensors or switches."""
+        if self._is_stopping or self.hass.is_stopping:
+            return
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
         if (
@@ -406,6 +416,8 @@ class SmartZoneHeatingCoordinator(
     @callback
     def _async_periodic_tick(self, _now: datetime) -> None:
         """Periodic check to update Day/Night schedule transitions and cooldown timer."""
+        if self._is_stopping or self.hass.is_stopping:
+            return
         self.hass.async_create_task(self.async_evaluate())
 
     async def async_set_zone_temp_sensor(
@@ -460,13 +472,15 @@ class SmartZoneHeatingCoordinator(
 
     async def async_evaluate(self) -> None:
         """Evaluate schedule, zones, power-driven cooldown + timer fallback, safety, and notifications."""
+        if self._is_stopping or self.hass.is_stopping:
+            return
         if self._evaluating:
             self._eval_pending = True
             return
         self._evaluating = True
         try:
             await self._async_evaluate_inner()
-            while self._eval_pending:
+            while self._eval_pending and not self._is_stopping and not self.hass.is_stopping:
                 self._eval_pending = False
                 await self._async_evaluate_inner()
         finally:
@@ -549,10 +563,71 @@ class SmartZoneHeatingCoordinator(
         elif zone.current_temp <= zone.target_temp - self.hysteresis:
             zone.requesting_heat = True
 
+    @callback
+    def _schedule_unavail_confirm(self, delay: float = 5.5) -> None:
+        """Schedule a re-evaluation after the unavailability confirmation window."""
+        if self._unsub_unavail_confirm or self._is_stopping or self.hass.is_stopping:
+            return
+
+        @callback
+        def _on_confirm(_now: datetime) -> None:
+            self._unsub_unavail_confirm = None
+            if not self._is_stopping and not self.hass.is_stopping:
+                self.hass.async_create_task(self.async_evaluate())
+
+        self._unsub_unavail_confirm = async_call_later(self.hass, delay, _on_confirm)
+
+    def _record_first_seen_unavailable(
+        self, current_unavail_set: set[str], now: datetime
+    ) -> None:
+        """Track first-seen timestamp and original Context for unavailable entities."""
+        for eid in list(self._unavail_first_seen):
+            if eid not in current_unavail_set:
+                self._unavail_first_seen.pop(eid, None)
+                self._unavail_cause_contexts.pop(eid, None)
+        for eid in current_unavail_set:
+            if eid not in self._unavail_first_seen:
+                self._unavail_first_seen[eid] = now
+                if st := self.hass.states.get(eid):
+                    self._unavail_cause_contexts[eid] = st.context
+
+    def _filter_confirmed_unavailable(
+        self, current_unavail_set: set[str], now: datetime
+    ) -> set[str]:
+        """Return entities unavailable for at least 5s so shutdown/reboot teardown does not trigger false alerts."""
+        self._record_first_seen_unavailable(current_unavail_set, now)
+        confirmed = {
+            eid
+            for eid in current_unavail_set
+            if eid in self._prev_unavailable_set
+            or (now - self._unavail_first_seen[eid]) >= timedelta(seconds=5)
+        }
+        if len(confirmed) < len(current_unavail_set):
+            self._schedule_unavail_confirm(5.5)
+        return confirmed
+
+    def _resolve_problem_cause_context(
+        self, newly_unavailable: list[str], newly_restored: list[str]
+    ) -> Context | None:
+        """Return the Context of the entity that caused the problem state transition."""
+        if newly_unavailable:
+            eid = newly_unavailable[0]
+            if ctx := self._unavail_cause_contexts.get(eid):
+                return ctx
+            st = self.hass.states.get(eid)
+            return st.context if st else None
+        if newly_restored:
+            st = self.hass.states.get(newly_restored[0])
+            return st.context if st else None
+        return None
+
     def _update_unavailability_tracking(
         self, unavailable: list[str], now: datetime
     ) -> tuple[list[str], list[str], Context | None]:
-        """Track newly unavailable/restored entities respecting the post-boot startup grace."""
+        """Track newly unavailable/restored entities respecting startup grace and shutdown suppression."""
+        if self._is_stopping or self.hass.is_stopping:
+            return [], [], None
+
         current_unavail_set = set(unavailable)
         if not current_unavail_set and self._startup_grace_until is not None:
             self._startup_grace_until = None
@@ -568,22 +643,19 @@ class SmartZoneHeatingCoordinator(
             self.problem_detected = False
             return [], [], None
 
-        newly_unavailable = sorted(current_unavail_set - self._prev_unavailable_set)
+        confirmed_unavail_set = self._filter_confirmed_unavailable(
+            current_unavail_set, now
+        )
+        newly_unavailable = sorted(confirmed_unavail_set - self._prev_unavailable_set)
         newly_restored = sorted(self._prev_unavailable_set - current_unavail_set)
-        self._prev_unavailable_set = current_unavail_set
-        self.unavailable_entities = sorted(current_unavail_set)
+        self._prev_unavailable_set = confirmed_unavail_set
+        self.unavailable_entities = sorted(confirmed_unavail_set)
         self.problem_detected = len(self.unavailable_entities) > 0
 
-        cause_entity: str | None = None
-        if newly_unavailable:
-            cause_entity = newly_unavailable[0]
-        elif newly_restored:
-            cause_entity = newly_restored[0]
-        cause_st = self.hass.states.get(cause_entity) if cause_entity else None
         return (
             newly_unavailable,
             newly_restored,
-            (cause_st.context if cause_st else None),
+            self._resolve_problem_cause_context(newly_unavailable, newly_restored),
         )
 
     def _format_cooldown_state(self, cooldown_mode: str) -> str:
