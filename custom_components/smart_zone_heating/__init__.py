@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from typing import Any
+
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import event as ha_event
 
@@ -34,6 +36,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.async_evaluate()
 
     ha_event.async_call_later(hass, 2.0, _async_delayed_eval)
+
+    if not hass.is_running:
+        async def _async_on_ha_started(_event: Any) -> None:
+            await coordinator.async_evaluate()
+
+        entry.async_on_unload(
+            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_on_ha_started)
+        )
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True

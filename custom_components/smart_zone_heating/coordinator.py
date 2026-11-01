@@ -461,6 +461,9 @@ class SmartZoneHeatingCoordinator:
         self._last_trigger_context = context
         for zone in self.zones.values():
             zone.hvac_mode_enabled = enabled
+        self.current_eval_context = context
+        self._notify_listeners()
+        self.current_eval_context = None
 
         state_str = "on" if enabled else "off"
         hvac_str = "heat" if enabled else "off"
@@ -639,6 +642,9 @@ class SmartZoneHeatingCoordinator:
         self.persist_config_option(CONF_ZONES, zones_cfg)
         self._last_trigger_context = context
         self._resubscribe_listeners()
+        self.current_eval_context = context
+        self._notify_listeners()
+        self.current_eval_context = None
         await self.async_record_action(
             entity_id=select_entity_id,
             action_desc=f"-> {sensor_entity_id} (zona {zone.name}, prec: {old_sensor})",
@@ -655,6 +661,9 @@ class SmartZoneHeatingCoordinator:
         target_preset = PRESET_AWAY if away else self.get_current_schedule_preset()
         for zone in self.zones.values():
             zone.apply_preset(target_preset)
+        self.current_eval_context = context
+        self._notify_listeners()
+        self.current_eval_context = None
         state_str = "on" if away else "off"
         await self.async_record_action(
             entity_id=entity_id,
@@ -725,6 +734,8 @@ class SmartZoneHeatingCoordinator:
         """Inner evaluation routine protected against re-entrancy."""
         unavailable: list[str] = []
         trigger_ctx = self._last_trigger_context
+        self._last_trigger_context = None
+        eval_ctx = trigger_ctx if trigger_ctx is not None else Context()
 
         # 0. Synchronize master_enabled with zone thermostats (ON if at least 1 zone is in HEAT mode)
         if self.zones:
@@ -739,10 +750,13 @@ class SmartZoneHeatingCoordinator:
                 if zone.preset_mode != PRESET_AWAY and not self.global_away_mode:
                     zone.apply_preset(current_period)
             if prev_period is not None:
+                self.current_eval_context = eval_ctx
+                self._notify_listeners()
+                self.current_eval_context = None
                 await self.async_record_action(
                     entity_id=None,
                     action_desc=f"fascia oraria -> {current_period}",
-                    context=trigger_ctx,
+                    context=eval_ctx,
                 )
 
         # Keep global_away_mode synced with zones
@@ -898,30 +912,31 @@ class SmartZoneHeatingCoordinator:
         self._was_manual_safety_active = self.manual_safety_active
 
         # 6. Update Problem detection, System State & write entity states BEFORE commanding switches
-        # so that Thermostat / System State rows exist in Recorder with the shared Context for 'Cosa è successo'
+        # Only emit unavailability/restoration logs once Home Assistant has finished starting up
         current_unavail_set = set(unavailable)
-        newly_unavailable = sorted(current_unavail_set - self._prev_unavailable_set)
-        newly_restored = sorted(self._prev_unavailable_set - current_unavail_set)
-        self._prev_unavailable_set = current_unavail_set
+        if self.hass.is_running:
+            newly_unavailable = sorted(current_unavail_set - self._prev_unavailable_set)
+            newly_restored = sorted(self._prev_unavailable_set - current_unavail_set)
+            self._prev_unavailable_set = current_unavail_set
 
-        if newly_unavailable:
-            unavail_st = self.hass.states.get(newly_unavailable[0])
-            unavail_ctx = unavail_st.context if unavail_st is not None else trigger_ctx
-            await self.async_record_action(
-                entity_id=newly_unavailable[0] if len(newly_unavailable) == 1 else None,
-                action_desc=f"entità indisponibili: {', '.join(newly_unavailable)}",
-                context=unavail_ctx,
-                level=NOTIFY_LEVEL_ERROR,
-            )
-        if newly_restored:
-            restored_st = self.hass.states.get(newly_restored[0])
-            restored_ctx = restored_st.context if restored_st is not None else trigger_ctx
-            await self.async_record_action(
-                entity_id=newly_restored[0] if len(newly_restored) == 1 else None,
-                action_desc=f"entità ripristinate: {', '.join(newly_restored)}",
-                context=restored_ctx,
-                level=NOTIFY_LEVEL_ERROR,
-            )
+            if newly_unavailable:
+                unavail_st = self.hass.states.get(newly_unavailable[0])
+                unavail_ctx = unavail_st.context if unavail_st is not None else trigger_ctx
+                await self.async_record_action(
+                    entity_id=newly_unavailable[0] if len(newly_unavailable) == 1 else None,
+                    action_desc=f"entità indisponibili: {', '.join(newly_unavailable)}",
+                    context=unavail_ctx,
+                    level=NOTIFY_LEVEL_ERROR,
+                )
+            if newly_restored:
+                restored_st = self.hass.states.get(newly_restored[0])
+                restored_ctx = restored_st.context if restored_st is not None else trigger_ctx
+                await self.async_record_action(
+                    entity_id=newly_restored[0] if len(newly_restored) == 1 else None,
+                    action_desc=f"entità ripristinate: {', '.join(newly_restored)}",
+                    context=restored_ctx,
+                    level=NOTIFY_LEVEL_ERROR,
+                )
 
         self.unavailable_entities = sorted(current_unavail_set)
         self.problem_detected = len(self.unavailable_entities) > 0
@@ -943,11 +958,8 @@ class SmartZoneHeatingCoordinator:
         else:
             self.system_state = STATE_IDLE
 
-        self.current_eval_context = trigger_ctx
-        self._notify_listeners()
-        self.current_eval_context = None
-
-        # 7. Determine final valve state for each zone (Heat Request OR Cooldown OR Manual Safety)
+        # 7. Determine final valve state & forced_open_reason for each zone BEFORE notifying listeners
+        valve_commands: list[tuple[ZoneRuntimeState, bool, str]] = []
         for zone in self.zones.values():
             should_open_valve = zone.requesting_heat
             t_curr = _fmt_temp(zone.current_temp)
@@ -977,13 +989,22 @@ class SmartZoneHeatingCoordinator:
                 else:
                     valve_reason = f"nessuna richiesta ({t_curr}>={t_targ})"
 
-            # Resolve cause Context for this zone if trigger_ctx is None
+            valve_commands.append((zone, should_open_valve, valve_reason))
+
+        # Write Thermostat / System State entity rows with eval_ctx BEFORE commanding switches
+        self.current_eval_context = eval_ctx
+        self._notify_listeners()
+        self.current_eval_context = None
+
+        for zone, should_open_valve, valve_reason in valve_commands:
             zone_ctx = trigger_ctx
             if zone_ctx is None:
                 if zone.climate_entity_id and (clim_st := self.hass.states.get(zone.climate_entity_id)):
                     zone_ctx = clim_st.context
                 elif zone.temp_sensor and (temp_st := self.hass.states.get(zone.temp_sensor)):
                     zone_ctx = temp_st.context
+                else:
+                    zone_ctx = eval_ctx
 
             await self._async_command_switch(
                 entity_id=zone.valve_entity,
@@ -1009,6 +1030,8 @@ class SmartZoneHeatingCoordinator:
                 if z.requesting_heat and z.climate_entity_id and (clim_st := self.hass.states.get(z.climate_entity_id)):
                     heater_ctx = clim_st.context
                     break
+            if heater_ctx is None:
+                heater_ctx = eval_ctx
 
         await self._async_command_switch(
             entity_id=self.heater_entity,
@@ -1027,9 +1050,10 @@ class SmartZoneHeatingCoordinator:
         """Command a switch respecting Exclusive Control, Wi-Fi switch latency, and Logbook cause attribution."""
         state_obj = self.hass.states.get(entity_id)
         if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            # Switch is offline (e.g. router reboot): clear desired/pending state so when it comes back online
-            # it is cleanly initialized without triggering a false Exclusive Control revert
-            self._last_desired_switch_state.pop(entity_id, None)
+            # Switch is offline (e.g. router reboot): clear pending command, and in Exclusive Control mode reset
+            # desired state so when it comes back online it aligns cleanly without a false tampering message
+            if self.exclusive_control:
+                self._last_desired_switch_state.pop(entity_id, None)
             self._pending_switch_cmd.pop(entity_id, None)
             return False
 
