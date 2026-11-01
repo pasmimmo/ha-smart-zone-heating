@@ -5,7 +5,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 from homeassistant.util import slugify
 
@@ -50,10 +50,6 @@ from .const import (
     DEFAULT_TEMP_DAY,
     DEFAULT_TEMP_NIGHT,
     DOMAIN,
-    NOTIFY_LEVEL_DEBUG,
-    NOTIFY_LEVEL_ERROR,
-    NOTIFY_LEVEL_OFF,
-    NOTIFY_LEVEL_WARNING,
 )
 from .coordinator import CONF_HYSTERESIS
 
