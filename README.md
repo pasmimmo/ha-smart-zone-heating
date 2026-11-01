@@ -4,6 +4,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)](https://github.com/pasmimmo/ha-smart-zone-heating/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-41BDF5.svg)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Quality gate status](https://sonarcloud.io/api/project_badges/measure?project=pasmimmo_ha-smart-zone-heating&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pasmimmo_ha-smart-zone-heating)
 
 📖 **Documentazione Completa / Full Documentation:**
 * 🇮🇹 **[Manuale Completo in Italiano (`doc/IT.md`)](doc/IT.md)**
