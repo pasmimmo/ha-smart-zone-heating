@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - name: Run Ruff Linter
-        uses: astral-sh/ruff-action@957c3fc0df5ccf8fde1ef4fd1ba252ab2bd372fb # v3.2.0
-        with:
-          args: "check custom_components/smart_zone_heating"
+      - name: Run Ruff Linter & Compile Check
+        run: |
+          python3 -m py_compile custom_components/smart_zone_heating/*.py
+          pipx run ruff check custom_components/smart_zone_heating
 
   validate-hacs:
     name: HACS Validation
