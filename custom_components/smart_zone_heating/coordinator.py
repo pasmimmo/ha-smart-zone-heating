@@ -234,10 +234,13 @@ class SmartZoneHeatingCoordinator:
 
         # Track last desired switch state for non-exclusive (edge-triggered) mode
         self._last_desired_switch_state: dict[str, bool] = {}
+        # Track in-flight switch commands (entity_id -> (target_turn_on, sent_at_utc)) to avoid false Exclusive Control reverts on slow Wi-Fi switches
+        self._pending_switch_cmd: dict[str, tuple[bool, datetime]] = {}
 
         # Context tracking for Home Assistant Logbook attribution
         self._last_trigger_context: Context | None = None
         self._last_trigger_entity_id: str | None = None
+        self.current_eval_context: Context | None = None
 
         self._listeners: list[Callable[[], None]] = []
         self._unsub_state_listener: Callable[[], None] | None = None
@@ -340,11 +343,8 @@ class SmartZoneHeatingCoordinator:
         message: str,
         context: Context | None = None,
     ) -> Context:
-        """Create a linked Context and fire a Home Assistant logbook_entry event with 'SZH Integration:' in message."""
-        action_context = Context(
-            user_id=context.user_id if context else None,
-            parent_id=context.id if context else None,
-        )
+        """Fire a Home Assistant logbook_entry event sharing the exact trigger Context so 'Cosa è successo' links the cause."""
+        action_context = context if context is not None else Context()
         # Always include 'SZH Integration:' in message because HA hides 'name' when viewing a single entity's history
         prefixed_msg = (
             message
@@ -588,8 +588,6 @@ class SmartZoneHeatingCoordinator:
     @callback
     def _async_on_state_change(self, event: Event) -> None:
         """Handle state changes of tracked sensors or switches."""
-        if self._evaluating:
-            return
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
         if old_state is not None and new_state is not None and old_state.state == new_state.state:
@@ -619,8 +617,6 @@ class SmartZoneHeatingCoordinator:
     @callback
     def _async_periodic_tick(self, now: datetime) -> None:
         """Periodic check to update Day/Night schedule transitions and cooldown timer."""
-        self._last_trigger_context = None
-        self._last_trigger_entity_id = None
         self.hass.async_create_task(self.async_evaluate())
 
     async def async_set_zone_temp_sensor(
@@ -901,7 +897,57 @@ class SmartZoneHeatingCoordinator:
             )
         self._was_manual_safety_active = self.manual_safety_active
 
-        # 6. Determine final valve state for each zone (Heat Request OR Cooldown OR Manual Safety)
+        # 6. Update Problem detection, System State & write entity states BEFORE commanding switches
+        # so that Thermostat / System State rows exist in Recorder with the shared Context for 'Cosa è successo'
+        current_unavail_set = set(unavailable)
+        newly_unavailable = sorted(current_unavail_set - self._prev_unavailable_set)
+        newly_restored = sorted(self._prev_unavailable_set - current_unavail_set)
+        self._prev_unavailable_set = current_unavail_set
+
+        if newly_unavailable:
+            unavail_st = self.hass.states.get(newly_unavailable[0])
+            unavail_ctx = unavail_st.context if unavail_st is not None else trigger_ctx
+            await self.async_record_action(
+                entity_id=newly_unavailable[0] if len(newly_unavailable) == 1 else None,
+                action_desc=f"entità indisponibili: {', '.join(newly_unavailable)}",
+                context=unavail_ctx,
+                level=NOTIFY_LEVEL_ERROR,
+            )
+        if newly_restored:
+            restored_st = self.hass.states.get(newly_restored[0])
+            restored_ctx = restored_st.context if restored_st is not None else trigger_ctx
+            await self.async_record_action(
+                entity_id=newly_restored[0] if len(newly_restored) == 1 else None,
+                action_desc=f"entità ripristinate: {', '.join(newly_restored)}",
+                context=restored_ctx,
+                level=NOTIFY_LEVEL_ERROR,
+            )
+
+        self.unavailable_entities = sorted(current_unavail_set)
+        self.problem_detected = len(self.unavailable_entities) > 0
+
+        if any_heating:
+            self.system_state = STATE_HEATING
+        elif cooldown_mode == "power":
+            w_val = f"{self.current_power_watt:.0f}W" if self.current_power_watt is not None else ""
+            self.system_state = f"{STATE_COOLDOWN_POWER} ({w_val})"
+        elif cooldown_mode == "timer":
+            rem = self.cooldown_remaining_minutes
+            self.system_state = f"{STATE_COOLDOWN_TIMER} ({rem} min)"
+        elif self.manual_safety_active:
+            self.system_state = STATE_MANUAL_SAFETY
+        elif not self.master_enabled:
+            self.system_state = STATE_DISABLED
+        elif self.problem_detected:
+            self.system_state = STATE_PROBLEM
+        else:
+            self.system_state = STATE_IDLE
+
+        self.current_eval_context = trigger_ctx
+        self._notify_listeners()
+        self.current_eval_context = None
+
+        # 7. Determine final valve state for each zone (Heat Request OR Cooldown OR Manual Safety)
         for zone in self.zones.values():
             should_open_valve = zone.requesting_heat
             t_curr = _fmt_temp(zone.current_temp)
@@ -931,14 +977,22 @@ class SmartZoneHeatingCoordinator:
                 else:
                     valve_reason = f"nessuna richiesta ({t_curr}>={t_targ})"
 
+            # Resolve cause Context for this zone if trigger_ctx is None
+            zone_ctx = trigger_ctx
+            if zone_ctx is None:
+                if zone.climate_entity_id and (clim_st := self.hass.states.get(zone.climate_entity_id)):
+                    zone_ctx = clim_st.context
+                elif zone.temp_sensor and (temp_st := self.hass.states.get(zone.temp_sensor)):
+                    zone_ctx = temp_st.context
+
             await self._async_command_switch(
                 entity_id=zone.valve_entity,
                 turn_on=should_open_valve,
                 reason=valve_reason,
-                trigger_context=trigger_ctx,
+                trigger_context=zone_ctx,
             )
 
-        # 7. Control main Heater switch (ON only when at least one zone requests heat)
+        # 8. Control main Heater switch (ON only when at least one zone requests heat)
         if any_heating:
             active_zones_str = ", ".join(
                 f"{z.name} {_fmt_temp(z.current_temp)}<{_fmt_temp(z.target_temp)}"
@@ -949,55 +1003,19 @@ class SmartZoneHeatingCoordinator:
         else:
             heater_reason = "nessuna richiesta"
 
+        heater_ctx = trigger_ctx
+        if heater_ctx is None:
+            for z in self.zones.values():
+                if z.requesting_heat and z.climate_entity_id and (clim_st := self.hass.states.get(z.climate_entity_id)):
+                    heater_ctx = clim_st.context
+                    break
+
         await self._async_command_switch(
             entity_id=self.heater_entity,
             turn_on=any_heating,
             reason=heater_reason,
-            trigger_context=trigger_ctx,
+            trigger_context=heater_ctx,
         )
-
-        # 8. Update Problem detection, send ERROR notifications on unavailability changes, & set System State
-        current_unavail_set = set(unavailable)
-        newly_unavailable = sorted(current_unavail_set - self._prev_unavailable_set)
-        newly_restored = sorted(self._prev_unavailable_set - current_unavail_set)
-        self._prev_unavailable_set = current_unavail_set
-
-        if newly_unavailable:
-            await self.async_record_action(
-                entity_id=newly_unavailable[0] if len(newly_unavailable) == 1 else None,
-                action_desc=f"entità indisponibili: {', '.join(newly_unavailable)}",
-                context=trigger_ctx,
-                level=NOTIFY_LEVEL_ERROR,
-            )
-        if newly_restored:
-            await self.async_record_action(
-                entity_id=newly_restored[0] if len(newly_restored) == 1 else None,
-                action_desc=f"entità ripristinate: {', '.join(newly_restored)}",
-                context=trigger_ctx,
-                level=NOTIFY_LEVEL_ERROR,
-            )
-
-        self.unavailable_entities = sorted(current_unavail_set)
-        self.problem_detected = len(self.unavailable_entities) > 0
-
-        if any_heating:
-            self.system_state = STATE_HEATING
-        elif cooldown_mode == "power":
-            w_val = f"{self.current_power_watt:.0f}W" if self.current_power_watt is not None else ""
-            self.system_state = f"{STATE_COOLDOWN_POWER} ({w_val})"
-        elif cooldown_mode == "timer":
-            rem = self.cooldown_remaining_minutes
-            self.system_state = f"{STATE_COOLDOWN_TIMER} ({rem} min)"
-        elif self.manual_safety_active:
-            self.system_state = STATE_MANUAL_SAFETY
-        elif not self.master_enabled:
-            self.system_state = STATE_DISABLED
-        elif self.problem_detected:
-            self.system_state = STATE_PROBLEM
-        else:
-            self.system_state = STATE_IDLE
-
-        self._notify_listeners()
 
     async def _async_command_switch(
         self,
@@ -1006,33 +1024,52 @@ class SmartZoneHeatingCoordinator:
         reason: str,
         trigger_context: Context | None = None,
     ) -> bool:
-        """Command a switch respecting Exclusive Control vs Edge-Triggered mode, and record unified SZH logbook + debug notification."""
+        """Command a switch respecting Exclusive Control, Wi-Fi switch latency, and Logbook cause attribution."""
+        state_obj = self.hass.states.get(entity_id)
+        if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            # Switch is offline (e.g. router reboot): clear desired/pending state so when it comes back online
+            # it is cleanly initialized without triggering a false Exclusive Control revert
+            self._last_desired_switch_state.pop(entity_id, None)
+            self._pending_switch_cmd.pop(entity_id, None)
+            return False
+
         prev_desired = self._last_desired_switch_state.get(entity_id)
         desired_changed = prev_desired is None or prev_desired != turn_on
         self._last_desired_switch_state[entity_id] = turn_on
 
+        is_currently_on = state_obj.state == STATE_ON
+        if is_currently_on == turn_on:
+            # Switch has reached the desired state -> clear any in-flight command tracking
+            self._pending_switch_cmd.pop(entity_id, None)
+            return False
+
         if not self.exclusive_control and not desired_changed:
             return False
 
-        state_obj = self.hass.states.get(entity_id)
-        if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-            return False
+        now = dt_util.utcnow()
+        if not desired_changed:
+            # Check if we recently sent a command to this switch and it's still in flight (e.g. Tapo Wi-Fi 3-4s latency)
+            pending = self._pending_switch_cmd.get(entity_id)
+            if pending is not None:
+                pend_target, pend_sent_at = pending
+                if pend_target == turn_on and (now - pend_sent_at).total_seconds() < 15.0:
+                    return False
 
-        is_currently_on = state_obj.state == STATE_ON
-        if is_currently_on == turn_on:
-            return False
-
+        self._pending_switch_cmd[entity_id] = (turn_on, now)
         target_str = "on" if turn_on else "off"
 
         if self.exclusive_control and not desired_changed:
             log_msg = f"ripristino stato -> {target_str}, {reason} (controllo esclusivo)"
+            # For an Exclusive Control revert, the direct cause in 'Cosa è successo' is the manual switch state change itself
+            cause_ctx = state_obj.context
         else:
             log_msg = f"-> {target_str}, {reason}"
+            cause_ctx = trigger_context
 
         action_context = await self.async_record_action(
             entity_id=entity_id,
             action_desc=log_msg,
-            context=trigger_context,
+            context=cause_ctx,
             level=NOTIFY_LEVEL_DEBUG,
         )
 
