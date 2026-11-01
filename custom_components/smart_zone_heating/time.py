@@ -103,6 +103,7 @@ class DayStartTimeEntity(TimeEntity):
         self.coordinator.persist_config_option(CONF_DAY_START_TIME, value.isoformat())
         self.coordinator._last_scheduled_period = None
         self.coordinator._last_trigger_context = self._context
+        self.async_write_ha_state()
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
             action_desc=f"-> {value.strftime('%H:%M')} (prec: {old_val})",
@@ -152,6 +153,7 @@ class NightStartTimeEntity(TimeEntity):
         self.coordinator.persist_config_option(CONF_NIGHT_START_TIME, value.isoformat())
         self.coordinator._last_scheduled_period = None
         self.coordinator._last_trigger_context = self._context
+        self.async_write_ha_state()
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
             action_desc=f"-> {value.strftime('%H:%M')} (prec: {old_val})",

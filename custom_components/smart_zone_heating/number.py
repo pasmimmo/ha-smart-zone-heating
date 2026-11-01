@@ -76,6 +76,7 @@ class HysteresisNumber(NumberEntity):
         self.coordinator.hysteresis = float(value)
         self.coordinator.persist_config_option(CONF_HYSTERESIS, self.coordinator.hysteresis)
         self.coordinator._last_trigger_context = self._context
+        self.async_write_ha_state()
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
             action_desc=f"-> {self.coordinator.hysteresis:g}°C (prec: {old_val:g}°C)",

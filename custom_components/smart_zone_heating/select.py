@@ -112,6 +112,8 @@ class ZoneTempSensorSelect(SelectEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
+        if self.coordinator.current_eval_context is not None:
+            self.async_set_context(self.coordinator.current_eval_context)
         self.async_write_ha_state()
 
     @property
@@ -172,6 +174,8 @@ class NotifyServiceSelect(SelectEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
+        if self.coordinator.current_eval_context is not None:
+            self.async_set_context(self.coordinator.current_eval_context)
         self.async_write_ha_state()
 
     @property
