@@ -12,7 +12,7 @@ from .const import DOMAIN
 from .coordinator import CONF_HYSTERESIS, SmartZoneHeatingCoordinator
 
 
-async def async_setup_entry(
+async def async_setup_entry(  # NOSONAR
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,

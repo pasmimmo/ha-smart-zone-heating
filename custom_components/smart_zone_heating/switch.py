@@ -14,7 +14,7 @@ from .const import CONF_SCHEDULE_ENABLED, DOMAIN
 from .coordinator import SmartZoneHeatingCoordinator
 
 
-async def async_setup_entry(
+async def async_setup_entry(  # NOSONAR
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,

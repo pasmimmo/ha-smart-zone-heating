@@ -26,7 +26,7 @@ from .const import DOMAIN
 from .coordinator import SmartZoneHeatingCoordinator, ZoneRuntimeState
 
 
-async def async_setup_entry(
+async def async_setup_entry(  # NOSONAR
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,

@@ -21,7 +21,7 @@ from .const import DOMAIN, PRESET_AWAY, PRESET_DAY, PRESET_NIGHT
 from .coordinator import SmartZoneHeatingCoordinator, ZoneRuntimeState
 
 
-async def async_setup_entry(
+async def async_setup_entry(  # NOSONAR
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
@@ -80,34 +80,36 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
 
         last_state = await self.async_get_last_state()
         if last_state is not None:
-            if last_state.state in (HVACMode.HEAT, HVACMode.OFF):
-                self.zone.hvac_mode_enabled = last_state.state == HVACMode.HEAT
-
-            for attr_key, prop_name in (
-                ("temp_day", "temp_day"),
-                ("temp_night", "temp_night"),
-                ("temp_away", "temp_away"),
-            ):
-                if (val := last_state.attributes.get(attr_key)) is not None:
-                    try:
-                        setattr(self.zone, prop_name, float(val))
-                    except (ValueError, TypeError):
-                        pass
-
-            restored_preset = last_state.attributes.get(ATTR_PRESET_MODE)
-            if restored_preset in self._attr_preset_modes:
-                self.zone.apply_preset(restored_preset)
-
-            restored_temp = last_state.attributes.get(ATTR_TEMPERATURE)
-            if restored_temp is not None:
-                try:
-                    self.zone.target_temp = float(restored_temp)
-                except (ValueError, TypeError):
-                    pass
+            self._restore_from_last_state(last_state)
 
         self.async_on_remove(
             self.coordinator.async_add_listener(self._handle_coordinator_update)
         )
+
+    def _restore_from_last_state(self, last_state: Any) -> None:
+        """Apply restored HVAC mode, preset temperatures, and target temperature."""
+        if last_state.state in (HVACMode.HEAT, HVACMode.OFF):
+            self.zone.hvac_mode_enabled = last_state.state == HVACMode.HEAT
+
+        for attr_key in ("temp_day", "temp_night", "temp_away"):
+            self._try_restore_float_attr(last_state.attributes.get(attr_key), attr_key)
+
+        restored_preset = last_state.attributes.get(ATTR_PRESET_MODE)
+        if restored_preset in self._attr_preset_modes:
+            self.zone.apply_preset(restored_preset)
+
+        self._try_restore_float_attr(
+            last_state.attributes.get(ATTR_TEMPERATURE), "target_temp"
+        )
+
+    def _try_restore_float_attr(self, raw_val: Any, attr_name: str) -> None:
+        """Safely parse and assign a float attribute on self.zone."""
+        if raw_val is None:
+            return
+        try:
+            setattr(self.zone, attr_name, float(raw_val))
+        except (ValueError, TypeError):
+            pass
 
     @callback
     def _handle_coordinator_update(self) -> None:

@@ -13,6 +13,26 @@ from .const import CONF_DAY_START_TIME, CONF_NIGHT_START_TIME, DOMAIN
 from .coordinator import SmartZoneHeatingCoordinator
 
 
+async def _async_remove_schedule_time_entities(
+    active_entities: list[TimeEntity],
+    entry_id: str,
+    ent_reg: er.EntityRegistry,
+) -> None:
+    """Remove dynamic Day and Night time entities when schedule_enabled is False."""
+    while active_entities:
+        ent = active_entities.pop()
+        ent_id = ent.entity_id
+        await ent.async_remove(force_remove=True)
+        if ent_id and ent_reg.async_get(ent_id):
+            ent_reg.async_remove(ent_id)
+    for uid in (
+        f"{entry_id}_day_start_time",
+        f"{entry_id}_night_start_time",
+    ):
+        if eid := ent_reg.async_get_entity_id("time", DOMAIN, uid):
+            ent_reg.async_remove(eid)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -39,18 +59,9 @@ async def async_setup_entry(
                 active_entities.extend(new_entities)
                 async_add_entities(new_entities)
         else:
-            while active_entities:
-                ent = active_entities.pop()
-                ent_id = ent.entity_id
-                await ent.async_remove(force_remove=True)
-                if ent_id and ent_reg.async_get(ent_id):
-                    ent_reg.async_remove(ent_id)
-            for uid in (
-                f"{entry.entry_id}_day_start_time",
-                f"{entry.entry_id}_night_start_time",
-            ):
-                if eid := ent_reg.async_get_entity_id("time", DOMAIN, uid):
-                    ent_reg.async_remove(eid)
+            await _async_remove_schedule_time_entities(
+                active_entities, entry.entry_id, ent_reg
+            )
 
     await _async_sync_schedule_time_entities()
 
