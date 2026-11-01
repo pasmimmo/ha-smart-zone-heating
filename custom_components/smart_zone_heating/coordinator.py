@@ -581,10 +581,10 @@ class SmartZoneHeatingCoordinator(
         self, current_unavail_set: set[str], now: datetime
     ) -> None:
         """Track first-seen timestamp and original Context for unavailable entities."""
-        for eid in list(self._unavail_first_seen):
-            if eid not in current_unavail_set:
-                self._unavail_first_seen.pop(eid, None)
-                self._unavail_cause_contexts.pop(eid, None)
+        stale_ids = [eid for eid in self._unavail_first_seen if eid not in current_unavail_set]
+        for eid in stale_ids:
+            self._unavail_first_seen.pop(eid, None)
+            self._unavail_cause_contexts.pop(eid, None)
         for eid in current_unavail_set:
             if eid not in self._unavail_first_seen:
                 self._unavail_first_seen[eid] = now
