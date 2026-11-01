@@ -111,6 +111,8 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
+        if self.coordinator.current_eval_context is not None:
+            self.async_set_context(self.coordinator.current_eval_context)
         self.async_write_ha_state()
 
     @property
@@ -160,6 +162,8 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
             elif self.zone.preset_mode == PRESET_AWAY:
                 self.zone.temp_away = new_temp
             self.coordinator._last_trigger_context = self._context
+            self.coordinator._last_trigger_entity_id = self.entity_id
+            self.async_write_ha_state()
             await self.coordinator.async_record_action(
                 entity_id=self.entity_id,
                 action_desc=f"-> target {new_temp:g}°C (preset {self.zone.preset_mode}, prec: {old_temp:g}°C)",
@@ -173,6 +177,8 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
             old_preset = self.zone.preset_mode
             self.zone.apply_preset(preset_mode)
             self.coordinator._last_trigger_context = self._context
+            self.coordinator._last_trigger_entity_id = self.entity_id
+            self.async_write_ha_state()
             await self.coordinator.async_record_action(
                 entity_id=self.entity_id,
                 action_desc=f"-> preset {preset_mode} (target {self.zone.target_temp:g}°C, prec: {old_preset})",
@@ -184,6 +190,8 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
         """Set new target hvac mode."""
         self.zone.hvac_mode_enabled = hvac_mode == HVACMode.HEAT
         self.coordinator._last_trigger_context = self._context
+        self.coordinator._last_trigger_entity_id = self.entity_id
+        self.async_write_ha_state()
         mode_str = "heat" if self.zone.hvac_mode_enabled else "off"
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
