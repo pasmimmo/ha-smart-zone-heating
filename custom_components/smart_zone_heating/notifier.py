@@ -18,9 +18,12 @@ from .models import LOGBOOK_NAME, NOTIFY_PREFIX
 
 _LOGGER = logging.getLogger(__name__)
 
+NOTIFY_LEVEL_RECOVERY = "recovery"
+
 _LEVEL_PRIORITY = {
     NOTIFY_LEVEL_OFF: 0,
     NOTIFY_LEVEL_ERROR: 3,
+    NOTIFY_LEVEL_RECOVERY: 3,
     NOTIFY_LEVEL_WARNING: 2,
     NOTIFY_LEVEL_DEBUG: 1,
 }
@@ -99,6 +102,7 @@ class CoordinatorNotificationMixin:
 
         prefix = {
             NOTIFY_LEVEL_ERROR: "🚨 [ERROR]",
+            NOTIFY_LEVEL_RECOVERY: "✅ [OK]",
             NOTIFY_LEVEL_WARNING: "⚠️ [WARN]",
             NOTIFY_LEVEL_DEBUG: "ℹ️ [DEBUG]",
         }.get(event_level, "")
@@ -183,7 +187,7 @@ class CoordinatorNotificationMixin:
                 entity_id=self.problem_binary_sensor_entity_id,
                 action_desc=f"problema risolto -> ripristinato: {restored_desc}",
                 context=eval_ctx,
-                level=NOTIFY_LEVEL_ERROR,
+                level=NOTIFY_LEVEL_RECOVERY,
             )
             for eid in newly_restored:
                 st = self.hass.states.get(eid)
