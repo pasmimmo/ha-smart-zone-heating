@@ -242,3 +242,4 @@ class CoordinatorSafetyMixin:
                 context=trigger_ctx,
             )
         self._was_manual_safety_active = self.manual_safety_active
+

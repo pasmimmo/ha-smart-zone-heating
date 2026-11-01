@@ -34,6 +34,7 @@ class CoordinatorSwitchMixin:
     _last_desired_switch_state: dict[str, bool]
     _pending_switch_cmd: dict[str, tuple[bool, datetime]]
     _last_trigger_context: Context | None
+    _is_stopping: bool
 
     def persist_config_option(self, key: str, value: Any) -> None:
         """Implemented by Coordinator."""
@@ -174,6 +175,8 @@ class CoordinatorSwitchMixin:
         trigger_context: Context | None = None,
     ) -> bool:
         """Command a switch respecting Exclusive Control, Wi-Fi switch latency, and Logbook cause attribution."""
+        if getattr(self, "_is_stopping", False) or self.hass.is_stopping:
+            return False
         state_obj = self.hass.states.get(entity_id)
         if state_obj is None or state_obj.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             self._handle_offline_switch(entity_id)
@@ -217,3 +220,4 @@ class CoordinatorSwitchMixin:
             context=action_context,
         )
         return True
+

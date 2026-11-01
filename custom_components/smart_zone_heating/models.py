@@ -76,3 +76,4 @@ class ZoneRuntimeState:
             self.target_temp = self.temp_night
         elif preset == PRESET_AWAY:
             self.target_temp = self.temp_away
+

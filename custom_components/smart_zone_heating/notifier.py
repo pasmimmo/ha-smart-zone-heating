@@ -33,6 +33,8 @@ class CoordinatorNotificationMixin:
     notify_service: str | None
     notify_level: str
     problem_binary_sensor_entity_id: str | None
+    _is_stopping: bool
+    _unavail_cause_contexts: dict[str, Context]
 
     def friendly_entity_label(self, entity_id: str) -> str:
         """Return a human-friendly name for an entity_id (falling back to entity_id)."""
@@ -55,6 +57,8 @@ class CoordinatorNotificationMixin:
     ) -> Context:
         """Fire a Home Assistant logbook_entry event sharing the exact trigger Context so 'Cosa è successo' links the cause."""
         action_context = context if context is not None else Context()
+        if getattr(self, "_is_stopping", False) or self.hass.is_stopping:
+            return action_context
         prefixed_msg = (
             message
             if message.startswith(LOGBOOK_NAME)
@@ -82,6 +86,8 @@ class CoordinatorNotificationMixin:
 
     async def _async_notify(self, event_level: str, message: str) -> None:
         """Send notification via configured notify.* service if level matches."""
+        if getattr(self, "_is_stopping", False) or self.hass.is_stopping:
+            return
         full_msg = (
             message
             if message.startswith(NOTIFY_PREFIX)
@@ -160,10 +166,13 @@ class CoordinatorNotificationMixin:
             )
             for eid in newly_unavailable:
                 st = self.hass.states.get(eid)
+                cause_ctx = self._unavail_cause_contexts.get(eid) or (
+                    st.context if st is not None else eval_ctx
+                )
                 self._fire_logbook_entry(
                     entity_id=eid,
                     message=f"entità indisponibile ({self.friendly_entity_label(eid)})",
-                    context=st.context if st is not None else eval_ctx,
+                    context=cause_ctx,
                 )
 
         if newly_restored:
@@ -183,3 +192,4 @@ class CoordinatorNotificationMixin:
                     message=f"entità ripristinata ({self.friendly_entity_label(eid)})",
                     context=st.context if st is not None else eval_ctx,
                 )
+
