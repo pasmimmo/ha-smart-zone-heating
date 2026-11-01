@@ -19,7 +19,7 @@ jobs:
       - name: Run Ruff Linter & Compile Check
         run: |
           python3 -m py_compile custom_components/smart_zone_heating/*.py
-          pipx run ruff check custom_components/smart_zone_heating
+          pipx run ruff check --select E,F,W --ignore E501 custom_components/smart_zone_heating
 
   validate-hacs:
     name: HACS Validation
