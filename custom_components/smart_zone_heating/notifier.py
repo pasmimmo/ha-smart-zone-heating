@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from homeassistant.core import Context, HomeAssistant
@@ -42,8 +41,6 @@ _LEVEL_TAG = {
     NOTIFY_LEVEL_WARNING: "WARN",
     NOTIFY_LEVEL_DEBUG: "DEBUG",
 }
-
-_TRAILING_PAREN_RE = re.compile(r"^(.*?)\s*\(([^()]*)\)\s*$")
 
 
 class CoordinatorNotificationMixin:
@@ -87,12 +84,13 @@ class CoordinatorNotificationMixin:
             status_str = entity_label
             rest = desc
 
-        match = _TRAILING_PAREN_RE.match(rest.strip())
-        if match:
-            reason_str = match.group(1).strip() or rest.strip()
-            value_str: str | None = match.group(2).strip()
+        rest_clean = rest.strip()
+        open_idx = rest_clean.rfind("(")
+        if rest_clean.endswith(")") and open_idx != -1:
+            reason_str = rest_clean[:open_idx].strip() or rest_clean
+            value_str: str | None = rest_clean[open_idx + 1 : -1].strip()
         else:
-            reason_str = rest.strip()
+            reason_str = rest_clean
             value_str = None
 
         return status_str, reason_str, value_str
