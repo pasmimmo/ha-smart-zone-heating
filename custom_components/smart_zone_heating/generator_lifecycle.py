@@ -1,4 +1,4 @@
-"""Heat dissipation (Cooldown) and Manual Ignition Safety mixin for Smart Zone Heating."""
+"""Generator Lifecycle Estimation (Watt & Timer fallback) and Manual Ignition Safety."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -8,14 +8,20 @@ from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
-from .const import NOTIFY_LEVEL_DEBUG, NOTIFY_LEVEL_WARNING
+from .const import (
+     GENERATOR_PHASE_LABELS,
+    NOTIFY_LEVEL_DEBUG,
+    NOTIFY_LEVEL_WARNING,
+    GeneratorPhase,
+)
 from .models import ZoneRuntimeState, fmt_temp
 
 
-class CoordinatorSafetyMixin:
-    """Mixin managing Watt/timer heat dissipation and Manual Ignition Safety."""
+class CoordinatorGeneratorLifecycleMixin:
+    """Mixin estimating generator lifecycle phase (Off, Starting, Running, Cooldown, Manual Override)."""
 
     hass: HomeAssistant
+    heater_entity: str
     zones: dict[str, ZoneRuntimeState]
     cooldown_enabled: bool
     cooldown_minutes: int
@@ -34,6 +40,7 @@ class CoordinatorSafetyMixin:
     manual_safety_zone_id: str | None
     manual_safety_active: bool
     _was_manual_safety_active: bool
+    generator_phase: GeneratorPhase
     _unsub_cooldown_timer: Callable[[], None] | None
     _unsub_grace_timer: Callable[[], None] | None
 
@@ -56,6 +63,11 @@ class CoordinatorSafetyMixin:
         raise NotImplementedError
 
     @property
+    def generator_phase_label(self) -> str:
+        """Return localized Italian label for the current estimated generator phase."""
+        return GENERATOR_PHASE_LABELS.get(self.generator_phase, "Spento")
+
+    @property
     def cooldown_remaining_minutes(self) -> int:
         """Return remaining minutes of fallback cooldown timer when active."""
         if not self.in_cooldown or not self.cooldown_until:
@@ -66,16 +78,16 @@ class CoordinatorSafetyMixin:
         delta = self.cooldown_until - now
         return max(1, int((delta.total_seconds() + 59) // 60))
 
-    def _start_cooldown(self) -> None:
+    def _start_cooldown(self, now: datetime | None = None) -> None:
         """Start heat dissipation phase (power-monitored primary + timer fallback)."""
         self._cancel_cooldown()
-        now = dt_util.utcnow()
+        current_now = now or dt_util.utcnow()
         self.in_cooldown = True
-        self.cooldown_started_at = now
+        self.cooldown_started_at = current_now
         self._cooldown_fallback_warned = False
 
         if self.cooldown_minutes > 0:
-            self.cooldown_until = now + timedelta(minutes=self.cooldown_minutes)
+            self.cooldown_until = current_now + timedelta(minutes=self.cooldown_minutes)
 
             @callback
             def _on_cooldown_timer_expired(_now: datetime) -> None:
@@ -118,7 +130,7 @@ class CoordinatorSafetyMixin:
         now: datetime,
         trigger_ctx: Context | None,
     ) -> str | None:
-        """Manage heat dissipation phase (Watt-driven primary, timer fallback)."""
+        """Manage heat dissipation phase (Watt lifecycle primary, timer fallback)."""
         if not self.cooldown_enabled or any_heating:
             self._was_heating = any_heating
             if self.in_cooldown:
@@ -127,11 +139,11 @@ class CoordinatorSafetyMixin:
 
         if self._was_heating:
             self._was_heating = False
-            self._start_cooldown()
+            self._start_cooldown(now)
             cooldown_zone_name = self.get_zone_name(self.cooldown_zone_id) or ""
             await self.async_record_action(
-                entity_id=None,
-                action_desc=f"avvio smaltimento calore su {cooldown_zone_name}",
+                entity_id=self.heater_entity,
+                action_desc=f"-> smaltimento calore, avvio smaltimento su {cooldown_zone_name} ({self.cooldown_minutes} min)",
                 context=trigger_ctx,
             )
 
@@ -147,7 +159,7 @@ class CoordinatorSafetyMixin:
     async def _async_check_power_cooldown(
         self, now: datetime, trigger_ctx: Context | None
     ) -> str | None:
-        """Evaluate Watt-driven cooldown completion."""
+        """Evaluate Watt-driven cooldown completion based on generator lifecycle."""
         in_initial_grace = (
             self.cooldown_started_at is not None
             and (now - self.cooldown_started_at).total_seconds()
@@ -162,8 +174,11 @@ class CoordinatorSafetyMixin:
 
         self._cancel_cooldown()
         await self.async_record_action(
-            entity_id=None,
-            action_desc=f"fine smaltimento calore, potenza {self.current_power_watt:.0f}W < {self.power_threshold_watt:.0f}W",
+            entity_id=self.heater_entity,
+            action_desc=(
+                f"-> spento, fine smaltimento calore ({fmt_temp(self.current_power_watt)}W "
+                f"< {fmt_temp(self.power_threshold_watt)}W)"
+            ),
             context=trigger_ctx,
         )
         return None
@@ -184,7 +199,7 @@ class CoordinatorSafetyMixin:
             self._cooldown_fallback_warned = True
             await self.async_record_action(
                 entity_id=self.power_sensor,
-                action_desc=f"indisponibile in smaltimento -> attivo timer fallback ({self.cooldown_minutes} min)",
+                action_desc=f"-> indisponibile, attivo timer fallback smaltimento ({self.cooldown_minutes} min)",
                 context=trigger_ctx,
                 level=NOTIFY_LEVEL_WARNING,
             )
@@ -194,8 +209,8 @@ class CoordinatorSafetyMixin:
 
         self._cancel_cooldown()
         await self.async_record_action(
-            entity_id=None,
-            action_desc="fine smaltimento calore (scaduto timer fallback)",
+            entity_id=self.heater_entity,
+            action_desc=f"-> spento, fine smaltimento calore (scaduto timer {self.cooldown_minutes} min)",
             context=trigger_ctx,
         )
         return None
@@ -208,7 +223,7 @@ class CoordinatorSafetyMixin:
         power_sensor_available: bool,
         trigger_ctx: Context | None,
     ) -> None:
-        """Evaluate Manual Ignition Safety (> threshold W while thermostats are idle)."""
+        """Evaluate Manual Ignition Detection (> threshold W while thermostats are idle)."""
         power_above_threshold = (
             self.manual_safety_enabled
             and power_sensor_configured
@@ -227,7 +242,10 @@ class CoordinatorSafetyMixin:
             safety_zone_name = self.get_zone_name(self.manual_safety_zone_id) or ""
             await self.async_record_action(
                 entity_id=self.power_sensor,
-                action_desc=f"accensione manuale rilevata ({self.current_power_watt:.0f}W >= {self.power_threshold_watt:.0f}W) -> apertura sicurezza {safety_zone_name}",
+                action_desc=(
+                    f"-> acceso manualmente, apertura sicurezza {safety_zone_name} "
+                    f"({fmt_temp(self.current_power_watt)}W >= {fmt_temp(self.power_threshold_watt)}W)"
+                ),
                 context=trigger_ctx,
                 level=NOTIFY_LEVEL_WARNING,
             )
@@ -238,8 +256,44 @@ class CoordinatorSafetyMixin:
         ):
             await self.async_record_action(
                 entity_id=self.power_sensor,
-                action_desc=f"fine sicurezza accensione manuale ({fmt_temp(self.current_power_watt)}W < {self.power_threshold_watt:g}W)",
+                action_desc=(
+                    f"-> spento, fine sicurezza accensione manuale ({fmt_temp(self.current_power_watt)}W "
+                    f"< {fmt_temp(self.power_threshold_watt)}W)"
+                ),
                 context=trigger_ctx,
             )
         self._was_manual_safety_active = self.manual_safety_active
 
+    def _update_generator_phase(
+        self,
+        any_heating: bool,
+        cooldown_mode: str | None,
+        power_sensor_configured: bool,
+        power_sensor_available: bool,
+    ) -> GeneratorPhase:
+        """Compute the estimated lifecycle phase of the heat generator."""
+        use_watt_lifecycle = self.use_power_sensor and power_sensor_configured
+        watt_above_threshold = (
+            use_watt_lifecycle
+            and power_sensor_available
+            and self.current_power_watt is not None
+            and self.current_power_watt >= self.power_threshold_watt
+        )
+
+        if any_heating:
+            if use_watt_lifecycle and power_sensor_available:
+                self.generator_phase = (
+                    GeneratorPhase.RUNNING
+                    if watt_above_threshold
+                    else GeneratorPhase.STARTING
+                )
+            else:
+                self.generator_phase = GeneratorPhase.RUNNING
+        elif cooldown_mode is not None:
+            self.generator_phase = GeneratorPhase.STOPPING_COOLDOWN
+        elif self.manual_safety_active or watt_above_threshold:
+            self.generator_phase = GeneratorPhase.MANUAL_OVERRIDE
+        else:
+            self.generator_phase = GeneratorPhase.OFF
+
+        return self.generator_phase

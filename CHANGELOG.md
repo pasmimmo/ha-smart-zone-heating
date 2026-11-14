@@ -2,6 +2,19 @@
 
 All notable changes to **Smart Zone Heating** are documented in this file.
 
+## [1.1.0] - 2026-11-14
+
+### Added
+- **Generator Lifecycle Estimation (`generator_lifecycle.py`)**: Dedicated state machine estimating the real-time lifecycle phase of the heat generator (`OFF`, `STARTING`, `RUNNING`, `STOPPING_COOLDOWN`, `MANUAL_OVERRIDE`) via Watt power monitoring with automatic fallback to the safety cooldown timer.
+- **Standardized `[SZH]` Entity Naming**: All entities created by the integration are now prefixed with `[SZH] <Entity Name>` (e.g., `[SZH] Generatore`, `[SZH] Termostato Piano 1`, `[SZH] Stato Sistema`) for immediate discovery and filtering in Home Assistant.
+- **Structured Friendly-Name Notifications**: Notifications and Activity Logbook (`SZH`) now use entity `friendly_name` labels instead of raw `entity_id`s and format messages with clear `Status:`, `Reason:`, and `Value:` lines (`ℹ️[SZH] - <motivo>`).
+- **Hydraulically Safe Actuation Ordering**: Guarantees that required zone valves open *before* turning on the heat generator (blocking generator startup if all demanding valves are `unavailable`) and that the heat generator turns off *before* closing zone valves.
+
+### Changed
+- **Modular Entity Architecture (`entity.py`)**: Consolidated common entity logic, device info, and Home Assistant `Context` propagation into `SmartZoneBaseEntity` and `SmartZoneEntity`.
+- **Non-Destructive Dynamic Entity Visibility**: Dynamic configuration entities (`Ora Giorno`, `Ora Notte`, `Notifiche: Livello`) now use `RegistryEntryHider.INTEGRATION` instead of destructive entity registry removal.
+- **Unified Documentation Structure**: Consolidated Italian and English manuals under `docs/IT.md` and `docs/EN.md`.
+
 ## [1.0.1] - 2026-11-01
 
 ### Added
@@ -24,5 +37,5 @@ All notable changes to **Smart Zone Heating** are documented in this file.
   - **Configurazione (Configuration)**: `Isteresi`, `Sensore <Zona>`, and `Notifiche` (with dynamic `Notifiche: Livello` appearing immediately below when enabled).
   - **Diagnostica (Diagnostics)**: Live status sensors for `Stato Sistema`, `Problema Sensori`, `Timer Smaltimento`, `Generatore`, `Consumo Generatore`, `Temperatura <Zona>`, and `Valvola <Zona>`.
 - **Multi-Page Advanced Settings (`OptionsFlow`)**: Conditional step-by-step configuration via the integration gear icon with 1–2 line explanations under every field.
-- **Unified Logbook & Debug Attribution**: Consistent `SZH Integration:` entries in Home Assistant's Activity Logbook and `[SZH Integration]` notifications across `Error`, `Warning`, and `Debug` levels.
-- **Documentation**: Complete Italian (`doc/IT.md`) and English (`doc/EN.md`) manuals.
+- **Unified Logbook & Debug Attribution**: Consistent `SZH` entries in Home Assistant's Activity Logbook and `[SZH]` notifications across `Error`, `Warning`, and `Debug` levels.
+- **Documentation**: Complete Italian (`docs/IT.md`) and English (`docs/EN.md`) manuals.

@@ -1,4 +1,7 @@
 """Constants for Smart Zone Heating integration."""
+from __future__ import annotations
+
+from enum import StrEnum
 
 DOMAIN = "smart_zone_heating"
 
@@ -29,7 +32,7 @@ CONF_COOLDOWN_MINUTES = "cooldown_minutes"
 CONF_COOLDOWN_ZONE_ID = "cooldown_zone_id"
 CONF_USE_POWER_SENSOR = "use_power_sensor"
 
-# Power consumption / Manual ignition safety settings
+# Generator lifecycle estimation (Watt) & Manual ignition settings
 CONF_POWER_SENSOR = "power_sensor"
 CONF_POWER_THRESHOLD_WATT = "power_threshold_watt"
 CONF_POWER_GRACE_SECONDS = "power_grace_seconds"
@@ -70,9 +73,23 @@ DEFAULT_POWER_GRACE_SECONDS = 15
 DEFAULT_NOTIFY_LEVEL = NOTIFY_LEVEL_WARNING
 
 STATE_IDLE = "Inattivo"
-STATE_HEATING = "Riscaldamento in corso"
-STATE_COOLDOWN_POWER = "Smaltimento calore (controllo Watt)"
-STATE_COOLDOWN_TIMER = "Smaltimento calore (timer fallback)"
-STATE_MANUAL_SAFETY = "Sicurezza accensione manuale (> soglia W)"
 STATE_DISABLED = "Impianto disabilitato"
-STATE_PROBLEM = "Attenzione: sensori indisponibili"
+
+
+class GeneratorPhase(StrEnum):
+    """Estimated lifecycle phase of the heat generator."""
+
+    OFF = "off"
+    STARTING = "starting"
+    RUNNING = "running"
+    STOPPING_COOLDOWN = "stopping_cooldown"
+    MANUAL_OVERRIDE = "manual_override"
+
+
+GENERATOR_PHASE_LABELS: dict[GeneratorPhase, str] = {
+    GeneratorPhase.OFF: "Spento",
+    GeneratorPhase.STARTING: "In avvio",
+    GeneratorPhase.RUNNING: "In funzione",
+    GeneratorPhase.STOPPING_COOLDOWN: "Smaltimento calore",
+    GeneratorPhase.MANUAL_OVERRIDE: "Acceso manualmente",
+}

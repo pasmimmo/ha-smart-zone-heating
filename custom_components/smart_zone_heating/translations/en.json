@@ -64,22 +64,22 @@
         }
       },
       "cooldown": {
-        "title": "Advanced Settings — 2. Heat Dissipation",
-        "description": "Select the zone valve to keep open during cooldown, whether to monitor generator power in Watts, and the closing timer.",
+        "title": "Advanced Settings — 2. Heat Dissipation & Lifecycle Estimation",
+        "description": "Select the zone valve to keep open during cooldown and whether to estimate the generator lifecycle via Watts.",
         "data": {
           "cooldown_zone_id": "Heat dissipation zone valve",
-          "use_power_sensor": "Use Watt monitoring sensor to detect generator operating state",
-          "cooldown_minutes": "Closing timer (minutes)"
+          "use_power_sensor": "Enable generator lifecycle estimation via Watts",
+          "cooldown_minutes": "Closing / fallback timer (minutes)"
         },
         "data_description": {
           "cooldown_zone_id": "Which zone valve to keep open after shutdown so residual hot water can circulate safely.",
-          "use_power_sensor": "If enabled, uses a power sensor (Watts) to close the valve as soon as the generator finishes shutting down.",
-          "cooldown_minutes": "Valve opening duration in minutes (used as a safety fallback if Watt monitoring is enabled)."
+          "use_power_sensor": "If enabled, estimates generator lifecycle phases (Off, Starting, Running, Cooldown) using a power sensor (Watts).",
+          "cooldown_minutes": "Valve opening duration in minutes (used as a safety fallback if Watt estimation is enabled)."
         }
       },
       "power_sensor": {
-        "title": "Advanced Settings — 2.1 Watt Monitoring",
-        "description": "Configure the power sensor and Watt threshold used to determine when the heat generator is active.",
+        "title": "Advanced Settings — 2.1 Generator Lifecycle Estimation (Watts)",
+        "description": "Configure the power sensor and Watt threshold used to estimate the heat generator lifecycle.",
         "data": {
           "power_sensor": "Power sensor (Watts)",
           "power_threshold_watt": "Operating threshold in Watts",
@@ -87,7 +87,7 @@
         },
         "data_description": {
           "power_sensor": "Select the Watt sensor (e.g. smart plug) measuring the electrical power draw of the heat generator.",
-          "power_threshold_watt": "Above this threshold (Watts) the generator is considered active; below this threshold it is considered off.",
+          "power_threshold_watt": "Above this threshold (Watts) the generator is estimated as running; below this threshold it is considered off.",
           "power_grace_seconds": "Initial wait time in seconds after shutdown before checking Watts, to ignore sensor reporting delays."
         }
       },
@@ -101,6 +101,30 @@
         "data_description": {
           "manual_safety_enabled": "If power draw exceeds the Watt threshold while thermostats are idle, automatically opens a safety valve.",
           "use_separate_manual_zone": "If disabled, uses the same valve as heat dissipation; if enabled, lets you choose a dedicated valve in the next step."
+        }
+      },
+      "manual_safety_no_watt": {
+        "title": "Advanced Settings — 3. Manual Ignition Detection",
+        "description": "⚠️ **Watt sensor required:** Since a power sensor was not enabled during heat dissipation setup, a Watt sensor is required to detect manual ignition.",
+        "data": {
+          "manual_safety_enabled": "Enable manual ignition detection (configure Watt sensor)"
+        },
+        "data_description": {
+          "manual_safety_enabled": "Enable to select the Watt sensor and safety valve in the next step; leave disabled to finish."
+        }
+      },
+      "manual_watt_setup": {
+        "title": "Advanced Settings — 3.1 Watt Sensor & Manual Ignition Valve",
+        "description": "Select the Watt sensor required to detect manual ignition and the safety valve to open.",
+        "data": {
+          "power_sensor": "Power sensor (Watts)",
+          "power_threshold_watt": "Operating threshold in Watts",
+          "manual_safety_zone_id": "Manual ignition safety valve"
+        },
+        "data_description": {
+          "power_sensor": "Watt sensor measuring the electrical power draw of the heat generator.",
+          "power_threshold_watt": "Above this threshold (Watts) while thermostats are off, the generator is considered manually ignited.",
+          "manual_safety_zone_id": "Which zone valve to open automatically when manual ignition is detected."
         }
       },
       "manual_zone": {
@@ -132,22 +156,22 @@
         }
       },
       "cooldown": {
-        "title": "Advanced Settings — 2. Heat Dissipation",
-        "description": "Select the zone valve to keep open during cooldown, whether to monitor generator power in Watts, and the closing timer.",
+        "title": "Advanced Settings — 2. Heat Dissipation & Lifecycle Estimation",
+        "description": "Select the zone valve to keep open during cooldown and whether to estimate the generator lifecycle via Watts.",
         "data": {
           "cooldown_zone_id": "Heat dissipation zone valve",
-          "use_power_sensor": "Use Watt monitoring sensor to detect generator operating state",
-          "cooldown_minutes": "Closing timer (minutes)"
+          "use_power_sensor": "Enable generator lifecycle estimation via Watts",
+          "cooldown_minutes": "Closing / fallback timer (minutes)"
         },
         "data_description": {
           "cooldown_zone_id": "Which zone valve to keep open after shutdown so residual hot water can circulate safely.",
-          "use_power_sensor": "If enabled, uses a power sensor (Watts) to close the valve as soon as the generator finishes shutting down.",
-          "cooldown_minutes": "Valve opening duration in minutes (used as a safety fallback if Watt monitoring is enabled)."
+          "use_power_sensor": "If enabled, estimates generator lifecycle phases (Off, Starting, Running, Cooldown) using a power sensor (Watts).",
+          "cooldown_minutes": "Valve opening duration in minutes (used as a safety fallback if Watt estimation is enabled)."
         }
       },
       "power_sensor": {
-        "title": "Advanced Settings — 2.1 Watt Monitoring",
-        "description": "Configure the power sensor and Watt threshold used to determine when the heat generator is active.",
+        "title": "Advanced Settings — 2.1 Generator Lifecycle Estimation (Watts)",
+        "description": "Configure the power sensor and Watt threshold used to estimate the heat generator lifecycle.",
         "data": {
           "power_sensor": "Power sensor (Watts)",
           "power_threshold_watt": "Operating threshold in Watts",
@@ -155,7 +179,7 @@
         },
         "data_description": {
           "power_sensor": "Select the Watt sensor (e.g. smart plug) measuring the electrical power draw of the heat generator.",
-          "power_threshold_watt": "Above this threshold (Watts) the generator is considered active; below this threshold it is considered off.",
+          "power_threshold_watt": "Above this threshold (Watts) the generator is estimated as running; below this threshold it is considered off.",
           "power_grace_seconds": "Initial wait time in seconds after shutdown before checking Watts, to ignore sensor reporting delays."
         }
       },
@@ -169,6 +193,30 @@
         "data_description": {
           "manual_safety_enabled": "If power draw exceeds the Watt threshold while thermostats are idle, automatically opens a safety valve.",
           "use_separate_manual_zone": "If disabled, uses the same valve as heat dissipation; if enabled, lets you choose a dedicated valve in the next step."
+        }
+      },
+      "manual_safety_no_watt": {
+        "title": "Advanced Settings — 3. Manual Ignition Detection",
+        "description": "⚠️ **Watt sensor required:** Since a power sensor was not enabled during heat dissipation setup, a Watt sensor is required to detect manual ignition.",
+        "data": {
+          "manual_safety_enabled": "Enable manual ignition detection (configure Watt sensor)"
+        },
+        "data_description": {
+          "manual_safety_enabled": "Enable to select the Watt sensor and safety valve in the next step; leave disabled to finish."
+        }
+      },
+      "manual_watt_setup": {
+        "title": "Advanced Settings — 3.1 Watt Sensor & Manual Ignition Valve",
+        "description": "Select the Watt sensor required to detect manual ignition and the safety valve to open.",
+        "data": {
+          "power_sensor": "Power sensor (Watts)",
+          "power_threshold_watt": "Operating threshold in Watts",
+          "manual_safety_zone_id": "Manual ignition safety valve"
+        },
+        "data_description": {
+          "power_sensor": "Watt sensor measuring the electrical power draw of the heat generator.",
+          "power_threshold_watt": "Above this threshold (Watts) while thermostats are off, the generator is considered manually ignited.",
+          "manual_safety_zone_id": "Which zone valve to open automatically when manual ignition is detected."
         }
       },
       "manual_zone": {
