@@ -1,8 +1,9 @@
 """Core Coordinator for Smart Zone Heating orchestrating zones, schedule, generator lifecycle, and switches."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, time, timedelta
-from typing import Any, Callable
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN

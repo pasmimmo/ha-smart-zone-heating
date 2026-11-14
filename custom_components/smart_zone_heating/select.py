@@ -110,7 +110,7 @@ class NotifyServiceSelect(SmartZoneBaseEntity, SelectEntity):
         notify_services = self.hass.services.async_services().get("notify", {})
         for svc_name in notify_services:
             candidates.add(f"notify.{svc_name}")
-        return ["none"] + sorted(c for c in candidates if c != "none")
+        return ["none", *sorted(c for c in candidates if c != "none")]
 
     @property
     def current_option(self) -> str:

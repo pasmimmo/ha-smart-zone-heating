@@ -1,6 +1,15 @@
 """Tests for zone thermostat hysteresis, valve actuation, and hydraulic safety ordering."""
 from __future__ import annotations
 
+from conftest import (
+    HEATER_SWITCH,
+    TEMP_ZONE_1,
+    TEMP_ZONE_2,
+    VALVE_ZONE_1,
+    VALVE_ZONE_2,
+    MockHardwareTracker,
+    build_default_entry_data,
+)
 from homeassistant.const import (
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
@@ -12,16 +21,6 @@ from homeassistant.core import HomeAssistant
 from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.smart_zone_heating.const import CONF_COOLDOWN_ENABLED, DOMAIN
-
-from conftest import (
-    HEATER_SWITCH,
-    TEMP_ZONE_1,
-    TEMP_ZONE_2,
-    VALVE_ZONE_1,
-    VALVE_ZONE_2,
-    MockHardwareTracker,
-    build_default_entry_data,
-)
 
 
 async def test_hysteresis_heating_cycle_and_hydraulic_order(

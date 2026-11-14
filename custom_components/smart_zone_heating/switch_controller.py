@@ -1,8 +1,8 @@
 """Physical switch control, Exclusive Control enforcement, and Registry visibility mixin."""
 from __future__ import annotations
 
-from datetime import datetime
 import logging
+from datetime import datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -234,7 +234,7 @@ class CoordinatorSwitchMixin:
                 blocking=True,
                 context=action_context,
             )
-        except (HomeAssistantError, Exception) as err:  # noqa: BLE001
+        except (HomeAssistantError, Exception) as err:
             self._pending_switch_cmd.pop(entity_id, None)
             _LOGGER.warning("Errore nel comando switch %s: %s", entity_id, err)
             return False

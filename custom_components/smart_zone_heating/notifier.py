@@ -57,9 +57,12 @@ class CoordinatorNotificationMixin:
         """Return a human-friendly name for an entity_id (stripping leading non-breaking space)."""
         if not entity_id:
             return LOGBOOK_NAME
-        if state := self.hass.states.get(entity_id):
-            if state.name and state.name != entity_id:
-                return state.name.lstrip("\u00a0").strip()
+        if (
+            (state := self.hass.states.get(entity_id))
+            and state.name
+            and state.name != entity_id
+        ):
+            return state.name.lstrip("\u00a0").strip()
         ent_reg = er.async_get(self.hass)
         if reg_entry := ent_reg.async_get(entity_id):
             if reg_entry.name:
@@ -130,10 +133,7 @@ class CoordinatorNotificationMixin:
             return action_context
         entity_label = self.friendly_entity_label(entity_id) if entity_id else ""
         clean_msg = message.strip()
-        if entity_label and clean_msg.startswith("->"):
-            log_text = f"{entity_label} {clean_msg}"
-        else:
-            log_text = clean_msg
+        log_text = f"{entity_label} {clean_msg}" if entity_label and clean_msg.startswith("->") else clean_msg
 
         prefixed_msg = (
             log_text
@@ -199,7 +199,7 @@ class CoordinatorNotificationMixin:
                     {"title": title, "message": full_msg},
                     blocking=False,
                 )
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.warning("Impossibile inviare notifica su %s: %s", svc, err)
 
     async def async_record_action(

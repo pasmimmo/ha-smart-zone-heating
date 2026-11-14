@@ -3,6 +3,15 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from conftest import (
+    HEATER_SWITCH,
+    TEMP_ZONE_1,
+    VALVE_ZONE_1,
+    VALVE_ZONE_2,
+    ZONE_2_ID,
+    MockHardwareTracker,
+    build_default_entry_data,
+)
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
@@ -17,16 +26,6 @@ from custom_components.smart_zone_heating.const import (
     CONF_USE_SEPARATE_MANUAL_ZONE,
     DOMAIN,
     GeneratorPhase,
-)
-
-from conftest import (
-    HEATER_SWITCH,
-    TEMP_ZONE_1,
-    VALVE_ZONE_1,
-    VALVE_ZONE_2,
-    ZONE_2_ID,
-    MockHardwareTracker,
-    build_default_entry_data,
 )
 
 
