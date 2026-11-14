@@ -1,7 +1,7 @@
 """Core Coordinator for Smart Zone Heating orchestrating zones, schedule, generator lifecycle, and switches."""
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime, time, timedelta
 from typing import Any
 
@@ -114,47 +114,24 @@ class SmartZoneHeatingCoordinator(
                 z.apply_preset(initial_period)
             self.zones[z.zone_id] = z
 
-        first_zone_id = next(iter(self.zones), None)
-
-        # Cooldown / heat dissipation settings
-        self.cooldown_enabled: bool = bool(data.get(CONF_COOLDOWN_ENABLED, True))
-        self.cooldown_minutes: int = int(
-            data.get(CONF_COOLDOWN_MINUTES, DEFAULT_COOLDOWN_MINUTES)
-        )
-        self.cooldown_zone_id: str | None = (
-            data.get(CONF_COOLDOWN_ZONE_ID) or first_zone_id
-        )
+        # Cooldown / heat dissipation & Generator lifecycle / Manual ignition settings
+        self.cooldown_enabled: bool = True
+        self.cooldown_minutes: int = DEFAULT_COOLDOWN_MINUTES
+        self.cooldown_zone_id: str | None = None
         self.in_cooldown: bool = False
         self.cooldown_started_at: datetime | None = None
         self.cooldown_until: datetime | None = None
         self._was_heating: bool = False
         self._cooldown_fallback_warned: bool = False
 
-        # Generator lifecycle estimation (Watt) & Manual ignition safety settings
-        self.power_sensor: str | None = data.get(CONF_POWER_SENSOR) or None
-        self.use_power_sensor: bool = bool(
-            data.get(CONF_USE_POWER_SENSOR, bool(self.power_sensor))
-        )
-        self.power_threshold_watt: float = float(
-            data.get(CONF_POWER_THRESHOLD_WATT, DEFAULT_POWER_THRESHOLD_WATT)
-        )
-        self.power_grace_seconds: int = int(
-            data.get(CONF_POWER_GRACE_SECONDS, DEFAULT_POWER_GRACE_SECONDS)
-        )
-        self.manual_safety_enabled: bool = bool(
-            data.get(CONF_MANUAL_SAFETY_ENABLED, bool(self.power_sensor))
-        )
-        self.use_separate_manual_zone: bool = bool(
-            data.get(CONF_USE_SEPARATE_MANUAL_ZONE, False)
-        )
-        if self.use_separate_manual_zone:
-            self.manual_safety_zone_id: str | None = (
-                data.get(CONF_MANUAL_SAFETY_ZONE_ID)
-                or self.cooldown_zone_id
-                or first_zone_id
-            )
-        else:
-            self.manual_safety_zone_id = self.cooldown_zone_id or first_zone_id
+        self.power_sensor: str | None = None
+        self.use_power_sensor: bool = False
+        self.power_threshold_watt: float = DEFAULT_POWER_THRESHOLD_WATT
+        self.power_grace_seconds: int = DEFAULT_POWER_GRACE_SECONDS
+        self.manual_safety_enabled: bool = False
+        self.use_separate_manual_zone: bool = False
+        self.manual_safety_zone_id: str | None = None
+        self._load_advanced_settings(data)
 
         self.current_power_watt: float | None = None
         self.manual_safety_active: bool = False
@@ -197,6 +174,52 @@ class SmartZoneHeatingCoordinator(
         self._evaluating: bool = False
         self._eval_pending: bool = False
 
+    def _load_advanced_settings(self, data: Mapping[str, Any]) -> None:
+        """Load heater, exclusive control, cooldown, power threshold, and manual safety settings from config."""
+        first_zone_id = next(iter(self.zones), None)
+        if CONF_HEATER_ENTITY in data:
+            self.heater_entity = data[CONF_HEATER_ENTITY]
+        self.exclusive_control = bool(data.get(CONF_EXCLUSIVE_CONTROL, False))
+        self.cooldown_enabled = bool(data.get(CONF_COOLDOWN_ENABLED, True))
+        self.cooldown_minutes = int(
+            data.get(CONF_COOLDOWN_MINUTES, DEFAULT_COOLDOWN_MINUTES)
+        )
+        self.cooldown_zone_id = data.get(CONF_COOLDOWN_ZONE_ID) or first_zone_id
+
+        self.power_sensor = data.get(CONF_POWER_SENSOR) or None
+        self.use_power_sensor = bool(
+            data.get(CONF_USE_POWER_SENSOR, bool(self.power_sensor))
+        )
+        self.power_threshold_watt = float(
+            data.get(CONF_POWER_THRESHOLD_WATT, DEFAULT_POWER_THRESHOLD_WATT)
+        )
+        self.power_grace_seconds = int(
+            data.get(CONF_POWER_GRACE_SECONDS, DEFAULT_POWER_GRACE_SECONDS)
+        )
+        self.manual_safety_enabled = bool(
+            data.get(CONF_MANUAL_SAFETY_ENABLED, bool(self.power_sensor))
+        )
+        self.use_separate_manual_zone = bool(
+            data.get(CONF_USE_SEPARATE_MANUAL_ZONE, False)
+        )
+        if self.use_separate_manual_zone:
+            self.manual_safety_zone_id = (
+                data.get(CONF_MANUAL_SAFETY_ZONE_ID)
+                or self.cooldown_zone_id
+                or first_zone_id
+            )
+        else:
+            self.manual_safety_zone_id = self.cooldown_zone_id or first_zone_id
+
+    @callback
+    def apply_options_in_place(self, data: Mapping[str, Any]) -> None:
+        """Immediately apply updated OptionsFlow settings to the running coordinator."""
+        self._load_advanced_settings(data)
+        if not self._is_stopping and not self.hass.is_stopping:
+            self.apply_exclusive_control_visibility()
+            self._resubscribe_listeners()
+            self.hass.async_create_task(self.async_evaluate())
+
     @property
     def device_info(self) -> DeviceInfo:
         """Return DeviceInfo so all entities are grouped under a single Device."""
@@ -205,7 +228,7 @@ class SmartZoneHeatingCoordinator(
             name=self.system_name,
             manufacturer="Smart Zone Heating",
             model="Multi-Zone Heating Controller",
-            sw_version="1.0.1",
+            sw_version="1.1.1",
         )
 
     @callback

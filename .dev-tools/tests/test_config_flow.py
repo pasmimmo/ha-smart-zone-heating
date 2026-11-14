@@ -11,6 +11,7 @@ from conftest import (
     build_default_entry_data,
 )
 from homeassistant import config_entries
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant.common import MockConfigEntry
@@ -175,3 +176,84 @@ async def test_options_flow_updates_settings(
     coordinator = hass.data[DOMAIN][entry.entry_id]
     assert coordinator.exclusive_control is True
     assert coordinator.cooldown_enabled is False
+
+
+async def test_options_flow_updates_power_threshold_and_manual_ignition(
+    hass: HomeAssistant,
+    mock_hardware: MockHardwareTracker,
+) -> None:
+    """Test changing power_threshold_watt from 10W to 3W in OptionsFlow and verifying manual ignition at 4W."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Riscaldamento Test",
+        data=build_default_entry_data(),
+        entry_id="test_opt_watt_3",
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    assert coordinator.power_threshold_watt == 10.0
+
+    # At 4W (< 10W initial threshold), manual ignition must NOT trigger yet
+    mock_hardware.set_power(4.0)
+    await hass.async_block_till_done()
+    assert coordinator.manual_safety_active is False
+    assert hass.states.get(VALVE_ZONE_1).state == STATE_OFF
+
+    # Open OptionsFlow and lower threshold to 3.0W
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_HEATER_ENTITY: HEATER_SWITCH,
+            CONF_EXCLUSIVE_CONTROL: False,
+            CONF_COOLDOWN_ENABLED: True,
+        },
+    )
+    assert result["step_id"] == "cooldown"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_COOLDOWN_ZONE_ID: ZONE_1_ID,
+            CONF_USE_POWER_SENSOR: True,
+            CONF_COOLDOWN_MINUTES: 30,
+        },
+    )
+    assert result["step_id"] == "power_sensor"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_POWER_SENSOR: POWER_SENSOR,
+            CONF_POWER_THRESHOLD_WATT: 3.0,
+            CONF_POWER_GRACE_SECONDS: 15,
+        },
+    )
+    assert result["step_id"] == "manual_safety"
+
+    # Even before completing Step 3, Step 2.1 must already be persisted and active in-place!
+    await hass.async_block_till_done()
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    assert coordinator.power_threshold_watt == 3.0
+    assert coordinator.manual_safety_active is True
+    assert hass.states.get(VALVE_ZONE_1).state == STATE_ON
+
+    # Complete Step 3 (manual_safety) -> full reload also preserves 3.0W
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_MANUAL_SAFETY_ENABLED: True,
+            CONF_USE_SEPARATE_MANUAL_ZONE: False,
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    assert coordinator.power_threshold_watt == 3.0
+    assert coordinator.manual_safety_active is True
+    assert hass.states.get(VALVE_ZONE_1).state == STATE_ON
+    assert "3W" in coordinator.zones[ZONE_1_ID].forced_open_reason

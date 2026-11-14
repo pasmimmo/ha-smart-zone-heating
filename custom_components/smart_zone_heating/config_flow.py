@@ -554,6 +554,7 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             self._pending_options[CONF_COOLDOWN_ENABLED] = cooldown_enabled
 
             if cooldown_enabled:
+                self._persist_step_options()
                 return await self.async_step_cooldown()
 
             self._pending_options[CONF_USE_POWER_SENSOR] = False
@@ -584,6 +585,7 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             )
 
             if use_power:
+                self._persist_step_options()
                 return await self.async_step_power_sensor()
 
             self._pending_options[CONF_POWER_SENSOR] = None
@@ -615,6 +617,7 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             self._pending_options[CONF_POWER_GRACE_SECONDS] = int(
                 user_input.get(CONF_POWER_GRACE_SECONDS, DEFAULT_POWER_GRACE_SECONDS)
             )
+            self._persist_step_options()
             return await self.async_step_manual_safety()
 
         return self.async_show_form(
@@ -635,6 +638,7 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             self._pending_options[CONF_USE_SEPARATE_MANUAL_ZONE] = use_separate
 
             if manual_enabled and use_separate:
+                self._persist_step_options()
                 return await self.async_step_manual_zone()
 
             self._pending_options[CONF_MANUAL_SAFETY_ZONE_ID] = data.get(
@@ -665,17 +669,28 @@ class SmartZoneHeatingOptionsFlow(config_entries.OptionsFlow):
             data_schema=_build_manual_zone_schema(zones, data),
         )
 
-    def _save_options(self) -> config_entries.FlowResult:
-        """Persist updated options into entry.data and entry.options triggering a single reload."""
+    def _persist_step_options(self) -> None:
+        """Persist pending options into entry.data/entry.options and apply them in-place to the coordinator."""
         merged_data = {**self._entry.data, **self._pending_options}
+        new_options = dict(self._pending_options)
         coordinator: SmartZoneHeatingCoordinator | None = self.hass.data.get(
             DOMAIN, {}
         ).get(self._entry.entry_id)
         if coordinator is not None:
+            coordinator.apply_options_in_place(merged_data)
             coordinator._ignore_update_listener_count += 1
         changed = self.hass.config_entries.async_update_entry(
-            self._entry, data=merged_data
+            self._entry, data=merged_data, options=new_options
         )
-        if not changed and coordinator is not None and coordinator._ignore_update_listener_count > 0:
+        if (
+            not changed
+            and coordinator is not None
+            and coordinator._ignore_update_listener_count > 0
+        ):
             coordinator._ignore_update_listener_count -= 1
+
+    def _save_options(self) -> config_entries.FlowResult:
+        """Persist updated options into entry.data and entry.options triggering a single reload."""
+        self._persist_step_options()
+        self.hass.config_entries.async_schedule_reload(self._entry.entry_id)
         return self.async_create_entry(title="", data=self._pending_options)
