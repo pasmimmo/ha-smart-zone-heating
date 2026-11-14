@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -14,11 +15,14 @@ from homeassistant.const import (
     STATE_UNKNOWN,
 )
 from homeassistant.core import Context, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_EXCLUSIVE_CONTROL, DOMAIN, NOTIFY_LEVEL_DEBUG
 from .models import ZoneRuntimeState
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class CoordinatorSwitchMixin:
@@ -55,7 +59,9 @@ class CoordinatorSwitchMixin:
         raise NotImplementedError
 
     @callback
-    def _set_entity_hidden_by_unique_id(self, unique_id: str, should_hide: bool) -> None:
+    def _set_entity_hidden_by_unique_id(
+        self, unique_id: str, should_hide: bool
+    ) -> None:
         """Hide or unhide one of our own config entities by its unique_id."""
         ent_reg = er.async_get(self.hass)
         entity_id = (
@@ -72,7 +78,10 @@ class CoordinatorSwitchMixin:
             ent_reg.async_update_entity(
                 entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION
             )
-        elif not should_hide and reg_entry.hidden_by == er.RegistryEntryHider.INTEGRATION:
+        elif (
+            not should_hide
+            and reg_entry.hidden_by == er.RegistryEntryHider.INTEGRATION
+        ):
             ent_reg.async_update_entity(entity_id, hidden_by=None)
 
     @callback
@@ -107,7 +116,10 @@ class CoordinatorSwitchMixin:
                 ent_reg.async_update_entity(
                     entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION
                 )
-            elif not should_hide and reg_entry.hidden_by == er.RegistryEntryHider.INTEGRATION:
+            elif (
+                not should_hide
+                and reg_entry.hidden_by == er.RegistryEntryHider.INTEGRATION
+            ):
                 ent_reg.async_update_entity(entity_id, hidden_by=None)
 
     async def async_set_exclusive_control(
@@ -174,7 +186,7 @@ class CoordinatorSwitchMixin:
         reason: str,
         trigger_context: Context | None = None,
     ) -> bool:
-        """Command a switch respecting Exclusive Control, Wi-Fi switch latency, and Logbook cause attribution."""
+        """Command a switch respecting Exclusive Control, Wi-Fi switch latency, and fault tolerance."""
         if getattr(self, "_is_stopping", False) or self.hass.is_stopping:
             return False
         state_obj = self.hass.states.get(entity_id)
@@ -194,7 +206,9 @@ class CoordinatorSwitchMixin:
             return False
 
         now = dt_util.utcnow()
-        if not desired_changed and self._is_switch_command_in_flight(entity_id, turn_on, now):
+        if not desired_changed and self._is_switch_command_in_flight(
+            entity_id, turn_on, now
+        ):
             return False
 
         self._pending_switch_cmd[entity_id] = (turn_on, now)
@@ -212,12 +226,16 @@ class CoordinatorSwitchMixin:
         domain = entity_id.split(".")[0]
         if domain not in ("switch", "input_boolean", "homeassistant"):
             domain = "homeassistant"
-        await self.hass.services.async_call(
-            domain,
-            SERVICE_TURN_ON if turn_on else SERVICE_TURN_OFF,
-            {ATTR_ENTITY_ID: entity_id},
-            blocking=True,
-            context=action_context,
-        )
+        try:
+            await self.hass.services.async_call(
+                domain,
+                SERVICE_TURN_ON if turn_on else SERVICE_TURN_OFF,
+                {ATTR_ENTITY_ID: entity_id},
+                blocking=True,
+                context=action_context,
+            )
+        except (HomeAssistantError, Exception) as err:  # noqa: BLE001
+            self._pending_switch_cmd.pop(entity_id, None)
+            _LOGGER.warning("Errore nel comando switch %s: %s", entity_id, err)
+            return False
         return True
-

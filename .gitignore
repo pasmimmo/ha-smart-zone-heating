@@ -1,9 +1,16 @@
-# Local development / Docker test environment (tracked only in develop branch)
-docker-compose.yml
-ha_test_config/
-
-# Python / OS artifacts
+# Python & Linter/Test caches
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.dev-tools/.pytest_cache/
+
+# Home Assistant local sandbox runtime files (keep only configuration.yaml)
+.dev-tools/sandbox/config/*
+.dev-tools/sandbox/config/.*
+!.dev-tools/sandbox/config/configuration.yaml
+
+# OS & Archives
 .DS_Store
+Thumbs.db
 *.zip

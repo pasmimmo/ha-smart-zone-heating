@@ -1,0 +1,30 @@
+services:
+  test-runner:
+    build:
+      context: ..
+      dockerfile: .dev-tools/Dockerfile.test
+    image: szh-dev-test-runner:2026.11.0
+    working_dir: /workspace
+    volumes:
+      - ..:/workspace
+    command: >
+      sh -c "
+        python3 -c 'import homeassistant.const as c; print(\"Running tests on Home Assistant\", c.__version__)' &&
+        python3 -m py_compile custom_components/smart_zone_heating/*.py &&
+        ruff check --select E,F,W --ignore E501 custom_components/smart_zone_heating &&
+        pytest -c .dev-tools/pytest.ini .dev-tools/tests -v
+      "
+
+  ha-sandbox:
+    container_name: ha-smart-zone-test
+    image: ghcr.io/home-assistant/home-assistant:2026.11.0
+    ports:
+      # Uses 8123 by default for live browser testing; override with HA_SANDBOX_PORT=0 for dynamic port binding
+      - "${HA_SANDBOX_PORT:-8123}:8123"
+    volumes:
+      - ./sandbox/config:/config
+      - ../custom_components/smart_zone_heating:/config/custom_components/smart_zone_heating
+    environment:
+      - TZ=Europe/Rome
+    profiles:
+      - sandbox

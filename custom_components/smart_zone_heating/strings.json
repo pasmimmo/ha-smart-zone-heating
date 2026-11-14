@@ -64,22 +64,22 @@
         }
       },
       "cooldown": {
-        "title": "Impostazioni Avanzate — 2. Smaltimento Calore",
-        "description": "Scegli la valvola da aprire in fase di smaltimento, se monitorare i Watt del generatore e il tempo di chiusura.",
+        "title": "Impostazioni Avanzate — 2. Smaltimento Calore e Stima Ciclo Vita",
+        "description": "Scegli la valvola da aprire in fase di smaltimento e se attivare la stima del ciclo vita del generatore tramite Watt.",
         "data": {
           "cooldown_zone_id": "Valvola di smaltimento calore",
-          "use_power_sensor": "Usa dispositivo di monitoraggio Watt per capire lo stato di funzionamento",
-          "cooldown_minutes": "Temporizzazione chiusura (minuti)"
+          "use_power_sensor": "Attiva stima ciclo vita generatore tramite Watt",
+          "cooldown_minutes": "Temporizzazione chiusura / fallback (minuti)"
         },
         "data_description": {
           "cooldown_zone_id": "Quale valvola di zona mantenere aperta per far circolare l'acqua calda residua dopo lo spegnimento.",
-          "use_power_sensor": "Se attivo, usa un sensore in Watt per chiudere la valvola non appena il generatore termina il ciclo di arresto.",
-          "cooldown_minutes": "Durata apertura valvola in minuti (se il monitoraggio Watt è attivo, viene usato come fallback di sicurezza)."
+          "use_power_sensor": "Se attivo, stima le fasi del ciclo vita del generatore (Spento, In avvio, In funzione, Smaltimento calore) tramite un sensore in Watt.",
+          "cooldown_minutes": "Durata apertura valvola in minuti (se la stima via Watt è attiva, viene usato come fallback di sicurezza)."
         }
       },
       "power_sensor": {
-        "title": "Impostazioni Avanzate — 2.1 Monitoraggio Watt",
-        "description": "Configura il sensore di potenza e la soglia per determinare quando l'impianto è in funzione.",
+        "title": "Impostazioni Avanzate — 2.1 Stima Ciclo Vita Generatore (Watt)",
+        "description": "Configura il sensore di potenza e la soglia per stimare il ciclo di funzionamento del generatore.",
         "data": {
           "power_sensor": "Selettore sensore potenza (Watt)",
           "power_threshold_watt": "Soglia funzionamento in Watt",
@@ -87,7 +87,7 @@
         },
         "data_description": {
           "power_sensor": "Seleziona il sensore in Watt (es. presa smart) che misura l'assorbimento elettrico del generatore.",
-          "power_threshold_watt": "Superiore a questa soglia in Watt l'impianto è considerato attivo; sotto questa soglia è considerato spento.",
+          "power_threshold_watt": "Superiore a questa soglia in Watt il generatore è stimato in funzione; sotto questa soglia è considerato spento.",
           "power_grace_seconds": "Secondi di attesa iniziale dopo lo spegnimento prima di controllare i Watt, per ignorare ritardi del sensore."
         }
       },
@@ -156,22 +156,22 @@
         }
       },
       "cooldown": {
-        "title": "Impostazioni Avanzate — 2. Smaltimento Calore",
-        "description": "Scegli la valvola da aprire in fase di smaltimento, se monitorare i Watt del generatore e il tempo di chiusura.",
+        "title": "Impostazioni Avanzate — 2. Smaltimento Calore e Stima Ciclo Vita",
+        "description": "Scegli la valvola da aprire in fase di smaltimento e se attivare la stima del ciclo vita del generatore tramite Watt.",
         "data": {
           "cooldown_zone_id": "Valvola di smaltimento calore",
-          "use_power_sensor": "Usa dispositivo di monitoraggio Watt per capire lo stato di funzionamento",
-          "cooldown_minutes": "Temporizzazione chiusura (minuti)"
+          "use_power_sensor": "Attiva stima ciclo vita generatore tramite Watt",
+          "cooldown_minutes": "Temporizzazione chiusura / fallback (minuti)"
         },
         "data_description": {
           "cooldown_zone_id": "Quale valvola di zona mantenere aperta per far circolare l'acqua calda residua dopo lo spegnimento.",
-          "use_power_sensor": "Se attivo, usa un sensore in Watt per chiudere la valvola non appena il generatore termina il ciclo di arresto.",
-          "cooldown_minutes": "Durata apertura valvola in minuti (se il monitoraggio Watt è attivo, viene usato come fallback di sicurezza)."
+          "use_power_sensor": "Se attivo, stima le fasi del ciclo vita del generatore (Spento, In avvio, In funzione, Smaltimento calore) tramite un sensore in Watt.",
+          "cooldown_minutes": "Durata apertura valvola in minuti (se la stima via Watt è attiva, viene usato come fallback di sicurezza)."
         }
       },
       "power_sensor": {
-        "title": "Impostazioni Avanzate — 2.1 Monitoraggio Watt",
-        "description": "Configura il sensore di potenza e la soglia per determinare quando l'impianto è in funzione.",
+        "title": "Impostazioni Avanzate — 2.1 Stima Ciclo Vita Generatore (Watt)",
+        "description": "Configura il sensore di potenza e la soglia per stimare il ciclo di funzionamento del generatore.",
         "data": {
           "power_sensor": "Selettore sensore potenza (Watt)",
           "power_threshold_watt": "Soglia funzionamento in Watt",
@@ -179,7 +179,7 @@
         },
         "data_description": {
           "power_sensor": "Seleziona il sensore in Watt (es. presa smart) che misura l'assorbimento elettrico del generatore.",
-          "power_threshold_watt": "Superiore a questa soglia in Watt l'impianto è considerato attivo; sotto questa soglia è considerato spento.",
+          "power_threshold_watt": "Superiore a questa soglia in Watt il generatore è stimato in funzione; sotto questa soglia è considerato spento.",
           "power_grace_seconds": "Secondi di attesa iniziale dopo lo spegnimento prima di controllare i Watt, per ignorare ritardi del sensore."
         }
       },

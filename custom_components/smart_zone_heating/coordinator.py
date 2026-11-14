@@ -1,4 +1,4 @@
-"""Core Coordinator for Smart Zone Heating orchestrating zones, schedule, safety, and switches."""
+"""Core Coordinator for Smart Zone Heating orchestrating zones, schedule, generator lifecycle, and switches."""
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
@@ -33,10 +33,8 @@ from .const import (
     CONF_POWER_THRESHOLD_WATT,
     CONF_SCHEDULE_ENABLED,
     CONF_SYSTEM_NAME,
-    CONF_TEMP_SENSOR,
     CONF_USE_POWER_SENSOR,
     CONF_USE_SEPARATE_MANUAL_ZONE,
-    CONF_ZONE_ID,
     CONF_ZONES,
     DEFAULT_COOLDOWN_MINUTES,
     DEFAULT_DAY_START_TIME,
@@ -51,7 +49,9 @@ from .const import (
     PRESET_NIGHT,
     STATE_DISABLED,
     STATE_IDLE,
+    GeneratorPhase,
 )
+from .generator_lifecycle import CoordinatorGeneratorLifecycleMixin
 from .models import (
     CONF_HYSTERESIS,
     LOGBOOK_NAME,
@@ -61,7 +61,6 @@ from .models import (
     parse_time,
 )
 from .notifier import CoordinatorNotificationMixin
-from .safety_manager import CoordinatorSafetyMixin
 from .switch_controller import CoordinatorSwitchMixin
 
 __all__ = [
@@ -76,14 +75,14 @@ __all__ = [
 class SmartZoneHeatingCoordinator(
     CoordinatorNotificationMixin,
     CoordinatorSwitchMixin,
-    CoordinatorSafetyMixin,
+    CoordinatorGeneratorLifecycleMixin,
 ):
-    """Manages multi-zone valves, presets/schedule, heater switch, power/timer cooldown, and SZH logbook/debug."""
+    """Manages multi-zone valves, presets/schedule, generator lifecycle estimation, and SZH logbook/debug."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
-        self._updating_from_entity: bool = False
+        self._ignore_update_listener_count: int = 0
         data = {**entry.data, **entry.options}
 
         self.system_name: str = data.get(CONF_SYSTEM_NAME, "Riscaldamento")
@@ -102,16 +101,21 @@ class SmartZoneHeatingCoordinator(
             data.get(CONF_NIGHT_START_TIME), DEFAULT_NIGHT_START_TIME
         )
         self.global_away_mode: bool = False
-        self._last_scheduled_period: str | None = None
+        initial_period = self.get_current_schedule_preset()
+        self._last_scheduled_period: str | None = (
+            initial_period if self.schedule_enabled else None
+        )
 
         self.zones: dict[str, ZoneRuntimeState] = {}
         for z_cfg in data.get(CONF_ZONES, []):
             z = ZoneRuntimeState(z_cfg, initial_enabled=self.master_enabled)
+            if self.schedule_enabled:
+                z.apply_preset(initial_period)
             self.zones[z.zone_id] = z
 
         first_zone_id = next(iter(self.zones), None)
 
-        # Cooldown / heat dissipation settings (Power primary + Timer fallback)
+        # Cooldown / heat dissipation settings
         self.cooldown_enabled: bool = bool(data.get(CONF_COOLDOWN_ENABLED, True))
         self.cooldown_minutes: int = int(
             data.get(CONF_COOLDOWN_MINUTES, DEFAULT_COOLDOWN_MINUTES)
@@ -125,7 +129,7 @@ class SmartZoneHeatingCoordinator(
         self._was_heating: bool = False
         self._cooldown_fallback_warned: bool = False
 
-        # Power consumption / manual ignition safety settings
+        # Generator lifecycle estimation (Watt) & Manual ignition safety settings
         self.power_sensor: str | None = data.get(CONF_POWER_SENSOR) or None
         self.use_power_sensor: bool = bool(
             data.get(CONF_USE_POWER_SENSOR, bool(self.power_sensor))
@@ -154,6 +158,7 @@ class SmartZoneHeatingCoordinator(
         self.current_power_watt: float | None = None
         self.manual_safety_active: bool = False
         self._was_manual_safety_active: bool = False
+        self.generator_phase: GeneratorPhase = GeneratorPhase.OFF
 
         # Notification settings
         self.notify_service: str | None = data.get(CONF_NOTIFY_SERVICE) or None
@@ -179,7 +184,6 @@ class SmartZoneHeatingCoordinator(
 
         # Context tracking for Home Assistant Logbook attribution
         self._last_trigger_context: Context | None = None
-        self._last_trigger_entity_id: str | None = None
         self.current_eval_context: Context | None = None
 
         self._listeners: list[Callable[[], None]] = []
@@ -204,19 +208,32 @@ class SmartZoneHeatingCoordinator(
         )
 
     @callback
+    def consume_internal_update_flag(self) -> bool:
+        """Return True and decrement counter if the config entry update was triggered internally by an entity."""
+        if self._ignore_update_listener_count > 0:
+            self._ignore_update_listener_count -= 1
+            return True
+        return False
+
+    @callback
     def persist_config_option(self, key: str, value: Any) -> None:
         """Persist a configuration option into entry.data / entry.options without triggering a full reload."""
-        self._updating_from_entity = True
-        try:
-            new_data = {**self.entry.data, key: value}
-            new_options = {**self.entry.options}
-            if key in new_options:
-                new_options[key] = value
-            self.hass.config_entries.async_update_entry(
-                self.entry, data=new_data, options=new_options
-            )
-        finally:
-            self._updating_from_entity = False
+        new_data = {**self.entry.data, key: value}
+        new_options = {**self.entry.options}
+        if key in new_options:
+            new_options[key] = value
+        self._ignore_update_listener_count += 1
+        changed = self.hass.config_entries.async_update_entry(
+            self.entry, data=new_data, options=new_options
+        )
+        if not changed and self._ignore_update_listener_count > 0:
+            self._ignore_update_listener_count -= 1
+
+    @callback
+    def persist_zones_config(self) -> None:
+        """Persist current zone configurations (sensors and preset temperatures) into entry data."""
+        zones_cfg = [z.to_config_dict() for z in self.zones.values()]
+        self.persist_config_option(CONF_ZONES, zones_cfg)
 
     async def async_set_master_enabled(
         self, enabled: bool, entity_id: str | None = None, context: Context | None = None
@@ -302,8 +319,9 @@ class SmartZoneHeatingCoordinator(
         )
 
     async def async_start(self) -> None:
-        """Start tracking entities, apply exclusive control visibility, and evaluate initial state."""
+        """Start tracking entities, apply visibility rules, and evaluate initial state."""
         self.apply_exclusive_control_visibility()
+        self.apply_dynamic_config_visibility()
         self._resubscribe_listeners()
         self.start_post_boot_grace(30)
         self._unsub_periodic_tick = async_track_time_interval(
@@ -337,24 +355,17 @@ class SmartZoneHeatingCoordinator(
     async def async_stop(self) -> None:  # NOSONAR
         """Clean up listeners on unload or Home Assistant stop."""
         self._is_stopping = True
-        if self._unsub_state_listener:
-            self._unsub_state_listener()
-            self._unsub_state_listener = None
-        if self._unsub_cooldown_timer:
-            self._unsub_cooldown_timer()
-            self._unsub_cooldown_timer = None
-        if self._unsub_grace_timer:
-            self._unsub_grace_timer()
-            self._unsub_grace_timer = None
-        if self._unsub_startup_grace:
-            self._unsub_startup_grace()
-            self._unsub_startup_grace = None
-        if self._unsub_unavail_confirm:
-            self._unsub_unavail_confirm()
-            self._unsub_unavail_confirm = None
-        if self._unsub_periodic_tick:
-            self._unsub_periodic_tick()
-            self._unsub_periodic_tick = None
+        for unsub_attr in (
+            "_unsub_state_listener",
+            "_unsub_cooldown_timer",
+            "_unsub_grace_timer",
+            "_unsub_startup_grace",
+            "_unsub_unavail_confirm",
+            "_unsub_periodic_tick",
+        ):
+            if unsub := getattr(self, unsub_attr, None):
+                unsub()
+                setattr(self, unsub_attr, None)
 
     def _read_sensor_float(self, entity_id: str | None) -> tuple[float | None, bool]:
         """Read float value from sensor/input_number. Returns (value, is_available)."""
@@ -410,7 +421,6 @@ class SmartZoneHeatingCoordinator(
                 return
 
         self._last_trigger_context = event.context
-        self._last_trigger_entity_id = entity_id
         self.hass.async_create_task(self.async_evaluate())
 
     @callback
@@ -433,19 +443,17 @@ class SmartZoneHeatingCoordinator(
             return
         old_sensor = zone.temp_sensor
         zone.temp_sensor = sensor_entity_id
-        zones_cfg = [dict(z) for z in self.entry.data.get(CONF_ZONES, [])]
-        for z_dict in zones_cfg:
-            if z_dict.get(CONF_ZONE_ID) == zone_id:
-                z_dict[CONF_TEMP_SENSOR] = sensor_entity_id
-        self.persist_config_option(CONF_ZONES, zones_cfg)
+        self.persist_zones_config()
         self._last_trigger_context = context
         self._resubscribe_listeners()
         self.current_eval_context = context
         self._notify_listeners()
         self.current_eval_context = None
+        new_label = self.friendly_entity_label(sensor_entity_id)
+        old_label = self.friendly_entity_label(old_sensor)
         await self.async_record_action(
             entity_id=select_entity_id,
-            action_desc=f"-> {sensor_entity_id} (zona {zone.name}, prec: {old_sensor})",
+            action_desc=f"-> {new_label}, cambio sensore {zone.name} ({old_label} -> {new_label})",
             context=context,
         )
         await self.async_evaluate()
@@ -471,7 +479,7 @@ class SmartZoneHeatingCoordinator(
         await self.async_evaluate()
 
     async def async_evaluate(self) -> None:
-        """Evaluate schedule, zones, power-driven cooldown + timer fallback, safety, and notifications."""
+        """Evaluate schedule, zones, generator lifecycle (Watt/timer), safety, and switch commands."""
         if self._is_stopping or self.hass.is_stopping:
             return
         if self._evaluating:
@@ -480,7 +488,11 @@ class SmartZoneHeatingCoordinator(
         self._evaluating = True
         try:
             await self._async_evaluate_inner()
-            while self._eval_pending and not self._is_stopping and not self.hass.is_stopping:
+            while (
+                self._eval_pending
+                and not self._is_stopping
+                and not self.hass.is_stopping
+            ):
                 self._eval_pending = False
                 await self._async_evaluate_inner()
         finally:
@@ -538,7 +550,8 @@ class SmartZoneHeatingCoordinator(
         """Update current_temp and hysteresis heat request for all zones."""
         any_heating = False
         for zone in self.zones.values():
-            if not self._is_entity_available(zone.valve_entity):
+            valve_ok = self._is_entity_available(zone.valve_entity)
+            if not valve_ok:
                 unavailable.append(zone.valve_entity)
 
             temp_val, temp_ok = self._read_sensor_float(zone.temp_sensor)
@@ -547,14 +560,20 @@ class SmartZoneHeatingCoordinator(
                 unavailable.append(zone.temp_sensor)
 
             zone.forced_open_reason = None
-            self._update_single_zone_request(zone)
+            self._update_single_zone_request(zone, valve_available=valve_ok)
             if zone.requesting_heat:
                 any_heating = True
         return any_heating
 
-    def _update_single_zone_request(self, zone: ZoneRuntimeState) -> None:
-        """Apply hysteresis threshold to a single zone's heat request."""
-        if not zone.hvac_mode_enabled or zone.current_temp is None:
+    def _update_single_zone_request(
+        self, zone: ZoneRuntimeState, valve_available: bool = True
+    ) -> None:
+        """Apply hysteresis threshold to a single zone's heat request (requires available valve)."""
+        if (
+            not zone.hvac_mode_enabled
+            or zone.current_temp is None
+            or not valve_available
+        ):
             zone.requesting_heat = False
             return
         if zone.requesting_heat:
@@ -581,7 +600,9 @@ class SmartZoneHeatingCoordinator(
         self, current_unavail_set: set[str], now: datetime
     ) -> None:
         """Track first-seen timestamp and original Context for unavailable entities."""
-        stale_ids = [eid for eid in self._unavail_first_seen if eid not in current_unavail_set]
+        stale_ids = [
+            eid for eid in self._unavail_first_seen if eid not in current_unavail_set
+        ]
         for eid in stale_ids:
             self._unavail_first_seen.pop(eid, None)
             self._unavail_cause_contexts.pop(eid, None)
@@ -724,7 +745,7 @@ class SmartZoneHeatingCoordinator(
         t_targ = fmt_temp(zone.target_temp)
 
         if zone.requesting_heat:
-            return True, f"Termostato {zone.name} {t_curr}<{t_targ}"
+            return True, f"Termostato {zone.name} ({t_curr}<{t_targ})"
 
         if cooldown_mode is not None and zone.zone_id == self.cooldown_zone_id:
             if cooldown_mode == "power":
@@ -741,13 +762,16 @@ class SmartZoneHeatingCoordinator(
             return True, zone.forced_open_reason
 
         if self.manual_safety_active and zone.zone_id == self.manual_safety_zone_id:
-            zone.forced_open_reason = f"sicurezza accensione manuale ({self.current_power_watt:.0f}W>={self.power_threshold_watt:g}W)"
+            zone.forced_open_reason = (
+                f"sicurezza accensione manuale ({fmt_temp(self.current_power_watt)}W>="
+                f"{fmt_temp(self.power_threshold_watt)}W)"
+            )
             return True, zone.forced_open_reason
 
         if not zone.hvac_mode_enabled:
             return False, f"Termostato {zone.name} off"
         if zone.current_temp is None:
-            return False, f"sensore {zone.temp_sensor} indisponibile"
+            return False, f"sensore {self.friendly_entity_label(zone.temp_sensor)} indisponibile"
         return False, f"nessuna richiesta ({t_curr}>={t_targ})"
 
     def _resolve_zone_context(
@@ -782,6 +806,53 @@ class SmartZoneHeatingCoordinator(
                 return clim_st.context
         return eval_ctx
 
+    async def _async_actuate_valves_and_heater(
+        self,
+        any_heating: bool,
+        valve_commands: list[tuple[ZoneRuntimeState, bool, str]],
+        trigger_ctx: Context | None,
+        eval_ctx: Context,
+    ) -> None:
+        """Actuate switches in hydraulically safe order (Turn-ON: Valves -> Heater; Turn-OFF: Heater -> Valves)."""
+        if any_heating:
+            active_zones_str = ", ".join(
+                f"{z.name} {fmt_temp(z.current_temp)}<{fmt_temp(z.target_temp)}"
+                for z in self.zones.values()
+                if z.requesting_heat
+            )
+            heater_reason = f"richiesta calore ({active_zones_str})"
+            for zone, should_open_valve, valve_reason in valve_commands:
+                await self._async_command_switch(
+                    entity_id=zone.valve_entity,
+                    turn_on=should_open_valve,
+                    reason=valve_reason,
+                    trigger_context=self._resolve_zone_context(
+                        zone, trigger_ctx, eval_ctx
+                    ),
+                )
+            await self._async_command_switch(
+                entity_id=self.heater_entity,
+                turn_on=True,
+                reason=heater_reason,
+                trigger_context=self._resolve_heater_context(trigger_ctx, eval_ctx),
+            )
+        else:
+            await self._async_command_switch(
+                entity_id=self.heater_entity,
+                turn_on=False,
+                reason="nessuna richiesta",
+                trigger_context=self._resolve_heater_context(trigger_ctx, eval_ctx),
+            )
+            for zone, should_open_valve, valve_reason in valve_commands:
+                await self._async_command_switch(
+                    entity_id=zone.valve_entity,
+                    turn_on=should_open_valve,
+                    reason=valve_reason,
+                    trigger_context=self._resolve_zone_context(
+                        zone, trigger_ctx, eval_ctx
+                    ),
+                )
+
     async def _async_evaluate_inner(self) -> None:
         """Inner evaluation routine protected against re-entrancy."""
         unavailable: list[str] = []
@@ -812,6 +883,13 @@ class SmartZoneHeatingCoordinator(
             trigger_ctx,
         )
 
+        self._update_generator_phase(
+            any_heating,
+            cooldown_mode,
+            power_sensor_configured,
+            power_sensor_available,
+        )
+
         newly_unavailable, newly_restored, problem_cause_ctx = (
             self._update_unavailability_tracking(unavailable, now)
         )
@@ -831,27 +909,6 @@ class SmartZoneHeatingCoordinator(
             newly_unavailable, newly_restored, eval_ctx
         )
 
-        for zone, should_open_valve, valve_reason in valve_commands:
-            await self._async_command_switch(
-                entity_id=zone.valve_entity,
-                turn_on=should_open_valve,
-                reason=valve_reason,
-                trigger_context=self._resolve_zone_context(zone, trigger_ctx, eval_ctx),
-            )
-
-        if any_heating:
-            active_zones_str = ", ".join(
-                f"{z.name} {fmt_temp(z.current_temp)}<{fmt_temp(z.target_temp)}"
-                for z in self.zones.values()
-                if z.requesting_heat
-            )
-            heater_reason = f"richiesta calore ({active_zones_str})"
-        else:
-            heater_reason = "nessuna richiesta"
-
-        await self._async_command_switch(
-            entity_id=self.heater_entity,
-            turn_on=any_heating,
-            reason=heater_reason,
-            trigger_context=self._resolve_heater_context(trigger_ctx, eval_ctx),
+        await self._async_actuate_valves_and_heater(
+            any_heating, valve_commands, trigger_ctx, eval_ctx
         )

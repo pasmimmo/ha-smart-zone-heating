@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -39,7 +38,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _async_delayed_eval(_now: datetime) -> None:
         await coordinator.async_evaluate()
 
-    ha_event.async_call_later(hass, 2.0, _async_delayed_eval)
+    entry.async_on_unload(
+        ha_event.async_call_later(hass, 2.0, _async_delayed_eval)
+    )
 
     if not hass.is_running:
         async def _async_on_ha_started(_event: Any) -> None:
@@ -62,11 +63,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update from OptionsFlow."""
+    """Handle options update from OptionsFlow, ignoring internal entity persistence updates."""
     coordinator: SmartZoneHeatingCoordinator | None = hass.data.get(DOMAIN, {}).get(
         entry.entry_id
     )
-    if coordinator and coordinator._updating_from_entity:
+    if coordinator and coordinator.consume_internal_update_flag():
         return
     await hass.config_entries.async_reload(entry.entry_id)
 

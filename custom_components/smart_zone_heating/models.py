@@ -23,8 +23,8 @@ from .const import (
     PRESET_NIGHT,
 )
 
-LOGBOOK_NAME = "SZH Integration"
-NOTIFY_PREFIX = "[SZH Integration]"
+LOGBOOK_NAME = "SZH"
+NOTIFY_PREFIX = "[SZH]"
 CONF_HYSTERESIS = "hysteresis"
 
 
@@ -40,7 +40,7 @@ def parse_time(val: str | time | None, default_str: str) -> time:
 
 
 def fmt_temp(val: float | None) -> str:
-    """Format temperature cleanly (e.g. 18.5 or 22)."""
+    """Format temperature or power number cleanly (e.g. 18.5 or 22, or '?' when None)."""
     if val is None:
         return "?"
     return f"{val:g}"
@@ -60,7 +60,7 @@ class ZoneRuntimeState:
         self.temp_night: float = float(zone_cfg.get(CONF_TEMP_NIGHT, DEFAULT_TEMP_NIGHT))
         self.temp_away: float = float(zone_cfg.get(CONF_TEMP_AWAY, DEFAULT_TEMP_AWAY))
         self.preset_mode: str = PRESET_DAY
-        self.target_temp: float = self.temp_day
+        self.target_temp: float = float(zone_cfg.get(CONF_TARGET_TEMP, self.temp_day))
         self.hvac_mode_enabled: bool = initial_enabled
         self.current_temp: float | None = None
         self.requesting_heat: bool = False
@@ -77,3 +77,15 @@ class ZoneRuntimeState:
         elif preset == PRESET_AWAY:
             self.target_temp = self.temp_away
 
+    def to_config_dict(self) -> dict[str, Any]:
+        """Serialize persistent configuration fields for this zone."""
+        return {
+            CONF_ZONE_ID: self.zone_id,
+            CONF_ZONE_NAME: self.name,
+            CONF_VALVE_ENTITY: self.valve_entity,
+            CONF_TEMP_SENSOR: self.temp_sensor,
+            CONF_TEMP_DAY: self.temp_day,
+            CONF_TEMP_NIGHT: self.temp_night,
+            CONF_TEMP_AWAY: self.temp_away,
+            CONF_TARGET_TEMP: self.target_temp,
+        }

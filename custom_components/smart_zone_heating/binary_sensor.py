@@ -9,12 +9,12 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import SmartZoneHeatingCoordinator
+from .entity import SmartZoneBaseEntity
 
 
 async def async_setup_entry(  # NOSONAR
@@ -27,38 +27,20 @@ async def async_setup_entry(  # NOSONAR
     async_add_entities([SystemProblemBinarySensor(coordinator)])
 
 
-class SystemProblemBinarySensor(BinarySensorEntity):
+class SystemProblemBinarySensor(SmartZoneBaseEntity, BinarySensorEntity):
     """Binary sensor that turns ON (Problem) when any configured sensor or switch is unavailable."""
 
-    _attr_has_entity_name = True
-    _attr_name = "\u00a0Problema Sensori"
+    _attr_name = "\u00a0[SZH] Problema Sensori"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator: SmartZoneHeatingCoordinator) -> None:
-        self.coordinator = coordinator
+        super().__init__(coordinator)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_problem"
-        self._attr_device_info = coordinator.device_info
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self.coordinator.problem_binary_sensor_entity_id = self.entity_id
-        ent_reg = er.async_get(self.hass)
-        if self.entity_id and ent_reg.async_get(self.entity_id):
-            ent_reg.async_update_entity(
-                self.entity_id,
-                entity_category=EntityCategory.DIAGNOSTIC,
-                original_name=self._attr_name,
-            )
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self._handle_coordinator_update)
-        )
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        if self.coordinator.current_eval_context is not None:
-            self.async_set_context(self.coordinator.current_eval_context)
-        self.async_write_ha_state()
 
     @property
     def is_on(self) -> bool:
@@ -75,4 +57,3 @@ class SystemProblemBinarySensor(BinarySensorEntity):
             "power_sensor": self.coordinator.power_sensor,
             "heater_entity": self.coordinator.heater_entity,
         }
-

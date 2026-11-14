@@ -18,12 +18,13 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .coordinator import SmartZoneHeatingCoordinator, ZoneRuntimeState
+from .coordinator import SmartZoneHeatingCoordinator
+from .entity import SmartZoneBaseEntity, SmartZoneEntity
 
 
 async def async_setup_entry(  # NOSONAR
@@ -63,40 +64,16 @@ async def async_setup_entry(  # NOSONAR
     async_add_entities(entities)
 
 
-class _BaseDiagnosticSensor(SensorEntity):
+class _BaseDiagnosticSensor(SmartZoneBaseEntity, SensorEntity):
     """Base diagnostic sensor listening to coordinator updates."""
 
-    _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: SmartZoneHeatingCoordinator) -> None:
-        self.coordinator = coordinator
-        self._attr_device_info = coordinator.device_info
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        ent_reg = er.async_get(self.hass)
-        if self.entity_id and ent_reg.async_get(self.entity_id):
-            ent_reg.async_update_entity(
-                self.entity_id,
-                entity_category=EntityCategory.DIAGNOSTIC,
-                original_name=self._attr_name,
-            )
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self._handle_coordinator_update)
-        )
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        if self.coordinator.current_eval_context is not None:
-            self.async_set_context(self.coordinator.current_eval_context)
-        self.async_write_ha_state()
 
 
 class SystemStateSensor(_BaseDiagnosticSensor):
     """Sensor showing the current operating state of the heating system (1st in Diagnostics)."""
 
-    _attr_name = "\u00a0Stato Sistema"
+    _attr_name = "\u00a0[SZH] Stato Sistema"
     _attr_icon = "mdi:fire-circle"
 
     def __init__(self, coordinator: SmartZoneHeatingCoordinator) -> None:
@@ -113,6 +90,8 @@ class SystemStateSensor(_BaseDiagnosticSensor):
             "heater_entity": self.coordinator.heater_entity,
             "power_sensor": self.coordinator.power_sensor,
             "current_power_watt": self.coordinator.current_power_watt,
+            "generator_phase": self.coordinator.generator_phase.value,
+            "generator_phase_label": self.coordinator.generator_phase_label,
             "active_zones": [
                 z.name for z in self.coordinator.zones.values() if z.requesting_heat
             ],
@@ -127,7 +106,7 @@ class SystemStateSensor(_BaseDiagnosticSensor):
 class CooldownRemainingSensor(_BaseDiagnosticSensor):
     """Sensor showing remaining minutes of heat dissipation after heater turns off."""
 
-    _attr_name = "\u00a0Timer Smaltimento"
+    _attr_name = "\u00a0[SZH] Timer Smaltimento"
     _attr_icon = "mdi:timer-outline"
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
 
@@ -141,9 +120,9 @@ class CooldownRemainingSensor(_BaseDiagnosticSensor):
 
 
 class HeaterDiagnosticSensor(_BaseDiagnosticSensor):
-    """Diagnostic sensor showing live state of the selected Heat Generator switch."""
+    """Diagnostic sensor showing live state and estimated lifecycle of the Heat Generator."""
 
-    _attr_name = "Generatore"
+    _attr_name = "[SZH] Generatore"
 
     def __init__(self, coordinator: SmartZoneHeatingCoordinator) -> None:
         super().__init__(coordinator)
@@ -154,6 +133,8 @@ class HeaterDiagnosticSensor(_BaseDiagnosticSensor):
         st = self.coordinator.hass.states.get(self.coordinator.heater_entity)
         if st and st.state == STATE_ON:
             return "mdi:fire"
+        if self.coordinator.in_cooldown or self.coordinator.manual_safety_active:
+            return "mdi:fire-alert"
         return "mdi:fire-off"
 
     @property
@@ -161,19 +142,30 @@ class HeaterDiagnosticSensor(_BaseDiagnosticSensor):
         st = self.coordinator.hass.states.get(self.coordinator.heater_entity)
         if st is None or st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return "Indisponibile"
+        if self.coordinator.use_power_sensor and self.coordinator.power_sensor:
+            return self.coordinator.generator_phase_label
         return "ON" if st.state == STATE_ON else "OFF"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        st = self.coordinator.hass.states.get(self.coordinator.heater_entity)
+        switch_state = (
+            "unavailable"
+            if st is None or st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+            else ("on" if st.state == STATE_ON else "off")
+        )
         return {
             "source_entity": self.coordinator.heater_entity,
+            "switch_state": switch_state,
+            "generator_phase": self.coordinator.generator_phase.value,
+            "ciclo_vita_stimato": self.coordinator.generator_phase_label,
         }
 
 
 class GeneratorPowerDiagnosticSensor(_BaseDiagnosticSensor):
     """Diagnostic sensor showing live power consumption (Watt) from the selected power sensor."""
 
-    _attr_name = "Consumo Generatore"
+    _attr_name = "[SZH] Consumo Generatore"
     _attr_icon = "mdi:flash"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -192,10 +184,11 @@ class GeneratorPowerDiagnosticSensor(_BaseDiagnosticSensor):
         return {
             "source_entity": self.coordinator.power_sensor,
             "threshold_watt": self.coordinator.power_threshold_watt,
+            "generator_phase": self.coordinator.generator_phase.value,
         }
 
 
-class ZoneTempDiagnosticSensor(_BaseDiagnosticSensor):
+class ZoneTempDiagnosticSensor(SmartZoneEntity, _BaseDiagnosticSensor):
     """Diagnostic sensor showing live temperature of the currently selected zone sensor."""
 
     _attr_device_class = SensorDeviceClass.TEMPERATURE
@@ -204,15 +197,9 @@ class ZoneTempDiagnosticSensor(_BaseDiagnosticSensor):
     _attr_icon = "mdi:thermometer"
 
     def __init__(self, coordinator: SmartZoneHeatingCoordinator, zone_id: str) -> None:
-        super().__init__(coordinator)
-        self.zone_id = zone_id
-        zone = self.zone
+        super().__init__(coordinator, zone_id)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{zone_id}_diag_temp"
-        self._attr_name = f"Temperatura {zone.name}"
-
-    @property
-    def zone(self) -> ZoneRuntimeState:
-        return self.coordinator.zones[self.zone_id]
+        self._attr_name = f"[SZH] Temperatura {self.zone.name}"
 
     @property
     def native_value(self) -> float | None:
@@ -227,19 +214,13 @@ class ZoneTempDiagnosticSensor(_BaseDiagnosticSensor):
         }
 
 
-class ZoneValveDiagnosticSensor(_BaseDiagnosticSensor):
+class ZoneValveDiagnosticSensor(SmartZoneEntity, _BaseDiagnosticSensor):
     """Diagnostic sensor showing live state of the selected zone valve switch."""
 
     def __init__(self, coordinator: SmartZoneHeatingCoordinator, zone_id: str) -> None:
-        super().__init__(coordinator)
-        self.zone_id = zone_id
-        zone = self.zone
+        super().__init__(coordinator, zone_id)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{zone_id}_diag_valve"
-        self._attr_name = f"Valvola {zone.name}"
-
-    @property
-    def zone(self) -> ZoneRuntimeState:
-        return self.coordinator.zones[self.zone_id]
+        self._attr_name = f"[SZH] Valvola {self.zone.name}"
 
     @property
     def icon(self) -> str:

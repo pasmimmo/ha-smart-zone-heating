@@ -12,13 +12,13 @@ from homeassistant.components.climate import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, PRESET_AWAY, PRESET_DAY, PRESET_NIGHT
-from .coordinator import SmartZoneHeatingCoordinator, ZoneRuntimeState
+from .coordinator import SmartZoneHeatingCoordinator
+from .entity import SmartZoneEntity
 
 
 async def async_setup_entry(  # NOSONAR
@@ -35,10 +35,9 @@ async def async_setup_entry(  # NOSONAR
     async_add_entities(entities)
 
 
-class SmartZoneThermostat(ClimateEntity, RestoreEntity):
+class SmartZoneThermostat(SmartZoneEntity, ClimateEntity, RestoreEntity):
     """Virtual Thermostat for a single heating zone with Day, Night, and Away modes."""
 
-    _attr_has_entity_name = True
     _attr_translation_key = "zone_thermostat"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
@@ -55,36 +54,19 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
     _enable_turn_on_off_backwards_compatibility = False
 
     def __init__(self, coordinator: SmartZoneHeatingCoordinator, zone_id: str) -> None:
-        self.coordinator = coordinator
-        self.zone_id = zone_id
-        zone = self.zone
+        super().__init__(coordinator, zone_id)
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{zone_id}_climate"
         # Leading non-breaking space sorts Thermostats first in the Controls box
-        self._attr_name = f"\u00a0Termostato {zone.name}"
-        self._attr_device_info = coordinator.device_info
-
-    @property
-    def zone(self) -> ZoneRuntimeState:
-        return self.coordinator.zones[self.zone_id]
+        self._attr_name = f"\u00a0[SZH] Termostato {self.zone.name}"
 
     async def async_added_to_hass(self) -> None:
         """Restore previous target temperatures, preset mode, and HVAC mode on startup."""
         await super().async_added_to_hass()
         self.zone.climate_entity_id = self.entity_id
-        ent_reg = er.async_get(self.hass)
-        if self.entity_id and ent_reg.async_get(self.entity_id):
-            ent_reg.async_update_entity(
-                self.entity_id,
-                original_name=self._attr_name,
-            )
 
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._restore_from_last_state(last_state)
-
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self._handle_coordinator_update)
-        )
 
     def _restore_from_last_state(self, last_state: Any) -> None:
         """Apply restored HVAC mode, preset temperatures, and target temperature."""
@@ -110,12 +92,6 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
             setattr(self.zone, attr_name, float(raw_val))
         except (ValueError, TypeError):
             pass
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        if self.coordinator.current_eval_context is not None:
-            self.async_set_context(self.coordinator.current_eval_context)
-        self.async_write_ha_state()
 
     @property
     def current_temperature(self) -> float | None:
@@ -163,12 +139,12 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
                 self.zone.temp_night = new_temp
             elif self.zone.preset_mode == PRESET_AWAY:
                 self.zone.temp_away = new_temp
+            self.coordinator.persist_zones_config()
             self.coordinator._last_trigger_context = self._context
-            self.coordinator._last_trigger_entity_id = self.entity_id
             self.async_write_ha_state()
             await self.coordinator.async_record_action(
                 entity_id=self.entity_id,
-                action_desc=f"-> target {new_temp:g}°C (preset {self.zone.preset_mode}, prec: {old_temp:g}°C)",
+                action_desc=f"-> {new_temp:g}°C, cambio temperatura target ({old_temp:g}°C -> {new_temp:g}°C, preset {self.zone.preset_mode})",
                 context=self._context,
             )
             await self.coordinator.async_evaluate()
@@ -178,12 +154,12 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
         if preset_mode in self._attr_preset_modes:
             old_preset = self.zone.preset_mode
             self.zone.apply_preset(preset_mode)
+            self.coordinator.persist_zones_config()
             self.coordinator._last_trigger_context = self._context
-            self.coordinator._last_trigger_entity_id = self.entity_id
             self.async_write_ha_state()
             await self.coordinator.async_record_action(
                 entity_id=self.entity_id,
-                action_desc=f"-> preset {preset_mode} (target {self.zone.target_temp:g}°C, prec: {old_preset})",
+                action_desc=f"-> {preset_mode}, cambio profilo ({old_preset} -> {preset_mode}, target {self.zone.target_temp:g}°C)",
                 context=self._context,
             )
             await self.coordinator.async_evaluate()
@@ -192,12 +168,11 @@ class SmartZoneThermostat(ClimateEntity, RestoreEntity):
         """Set new target hvac mode."""
         self.zone.hvac_mode_enabled = hvac_mode == HVACMode.HEAT
         self.coordinator._last_trigger_context = self._context
-        self.coordinator._last_trigger_entity_id = self.entity_id
         self.async_write_ha_state()
         mode_str = "heat" if self.zone.hvac_mode_enabled else "off"
         await self.coordinator.async_record_action(
             entity_id=self.entity_id,
-            action_desc=f"-> {mode_str} (Termostato {self.zone.name})",
+            action_desc=f"-> {mode_str}, cambio modalità termostato ({self.zone.name})",
             context=self._context,
         )
         await self.coordinator.async_evaluate()

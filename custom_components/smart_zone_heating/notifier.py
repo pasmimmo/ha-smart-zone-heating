@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from homeassistant.core import Context, HomeAssistant
@@ -28,6 +29,22 @@ _LEVEL_PRIORITY = {
     NOTIFY_LEVEL_DEBUG: 1,
 }
 
+_LEVEL_EMOJI = {
+    NOTIFY_LEVEL_ERROR: "🚨",
+    NOTIFY_LEVEL_RECOVERY: "✅",
+    NOTIFY_LEVEL_WARNING: "⚠️",
+    NOTIFY_LEVEL_DEBUG: "ℹ️",
+}
+
+_LEVEL_TAG = {
+    NOTIFY_LEVEL_ERROR: "ERROR",
+    NOTIFY_LEVEL_RECOVERY: "OK",
+    NOTIFY_LEVEL_WARNING: "WARN",
+    NOTIFY_LEVEL_DEBUG: "DEBUG",
+}
+
+_TRAILING_PAREN_RE = re.compile(r"^(.*?)\s*\(([^()]*)\)\s*$")
+
 
 class CoordinatorNotificationMixin:
     """Mixin handling Home Assistant Logbook attribution and notify.* service calls."""
@@ -39,18 +56,69 @@ class CoordinatorNotificationMixin:
     _is_stopping: bool
     _unavail_cause_contexts: dict[str, Context]
 
-    def friendly_entity_label(self, entity_id: str) -> str:
-        """Return a human-friendly name for an entity_id (falling back to entity_id)."""
+    def friendly_entity_label(self, entity_id: str | None) -> str:
+        """Return a human-friendly name for an entity_id (stripping leading non-breaking space)."""
+        if not entity_id:
+            return LOGBOOK_NAME
         if state := self.hass.states.get(entity_id):
             if state.name and state.name != entity_id:
-                return state.name
+                return state.name.lstrip("\u00a0").strip()
         ent_reg = er.async_get(self.hass)
         if reg_entry := ent_reg.async_get(entity_id):
             if reg_entry.name:
-                return reg_entry.name
+                return reg_entry.name.lstrip("\u00a0").strip()
             if reg_entry.original_name:
-                return reg_entry.original_name
+                return reg_entry.original_name.lstrip("\u00a0").strip()
         return entity_id
+
+    @staticmethod
+    def _parse_action_parts(
+        entity_label: str, action_desc: str
+    ) -> tuple[str, str, str | None]:
+        """Decompose action_desc into (status_str, reason_str, value_str)."""
+        desc = action_desc.strip()
+        if ", " in desc:
+            state_part, rest = desc.split(", ", 1)
+            status_str = f"{entity_label} {state_part.strip()},"
+        elif desc.startswith("->"):
+            status_str = f"{entity_label} {desc}"
+            rest = desc.removeprefix("->").strip()
+        else:
+            status_str = entity_label
+            rest = desc
+
+        match = _TRAILING_PAREN_RE.match(rest.strip())
+        if match:
+            reason_str = match.group(1).strip() or rest.strip()
+            value_str: str | None = match.group(2).strip()
+        else:
+            reason_str = rest.strip()
+            value_str = None
+
+        return status_str, reason_str, value_str
+
+    def _format_notification_payload(
+        self,
+        event_level: str,
+        entity_id: str | None,
+        action_desc: str,
+    ) -> tuple[str, str]:
+        """Format notification (title, message) using friendly names and structured lines."""
+        emoji = _LEVEL_EMOJI.get(event_level, "ℹ️")
+        tag = _LEVEL_TAG.get(event_level, "DEBUG")
+        entity_label = self.friendly_entity_label(entity_id)
+        status_str, reason_str, value_str = self._parse_action_parts(
+            entity_label, action_desc
+        )
+
+        title = f"{emoji}{NOTIFY_PREFIX} - {reason_str}"
+        lines = [
+            f"[{tag}] Status: {status_str}",
+            f"[{tag}] Reason: {reason_str}",
+        ]
+        if value_str:
+            lines.append(f"[{tag}] Value: {value_str}")
+        return title, "\n".join(lines)
 
     def _fire_logbook_entry(
         self,
@@ -58,14 +126,21 @@ class CoordinatorNotificationMixin:
         message: str,
         context: Context | None = None,
     ) -> Context:
-        """Fire a Home Assistant logbook_entry event sharing the exact trigger Context so 'Cosa è successo' links the cause."""
+        """Fire a Home Assistant logbook_entry event sharing the exact trigger Context."""
         action_context = context if context is not None else Context()
         if getattr(self, "_is_stopping", False) or self.hass.is_stopping:
             return action_context
+        entity_label = self.friendly_entity_label(entity_id) if entity_id else ""
+        clean_msg = message.strip()
+        if entity_label and clean_msg.startswith("->"):
+            log_text = f"{entity_label} {clean_msg}"
+        else:
+            log_text = clean_msg
+
         prefixed_msg = (
-            message
-            if message.startswith(LOGBOOK_NAME)
-            else f"{LOGBOOK_NAME}: {message}"
+            log_text
+            if log_text.startswith(NOTIFY_PREFIX)
+            else f"{NOTIFY_PREFIX} {log_text}"
         )
         log_data: dict[str, Any] = {
             "name": LOGBOOK_NAME,
@@ -87,26 +162,21 @@ class CoordinatorNotificationMixin:
             return False
         return event_prio >= configured_prio
 
-    async def _async_notify(self, event_level: str, message: str) -> None:
-        """Send notification via configured notify.* service if level matches."""
+    async def _async_notify(
+        self,
+        event_level: str,
+        entity_id: str | None,
+        action_desc: str,
+    ) -> None:
+        """Send structured notification via configured notify.* service if level matches."""
         if getattr(self, "_is_stopping", False) or self.hass.is_stopping:
             return
-        full_msg = (
-            message
-            if message.startswith(NOTIFY_PREFIX)
-            else f"{NOTIFY_PREFIX} {message}"
+        title, full_msg = self._format_notification_payload(
+            event_level, entity_id, action_desc
         )
-        _LOGGER.debug("%s [%s]", full_msg, event_level.upper())
+        _LOGGER.debug("%s | %s", title, full_msg.replace("\n", " | "))
         if not self._should_notify(event_level):
             return
-
-        prefix = {
-            NOTIFY_LEVEL_ERROR: "🚨 [ERROR]",
-            NOTIFY_LEVEL_RECOVERY: "✅ [OK]",
-            NOTIFY_LEVEL_WARNING: "⚠️ [WARN]",
-            NOTIFY_LEVEL_DEBUG: "ℹ️ [DEBUG]",
-        }.get(event_level, "")
-        title = f"{prefix} {LOGBOOK_NAME}".strip()
 
         svc = self.notify_service
         if not svc:
@@ -141,14 +211,13 @@ class CoordinatorNotificationMixin:
         context: Context | None = None,
         level: str = NOTIFY_LEVEL_DEBUG,
     ) -> Context:
-        """Record a unified action in both Home Assistant Logbook and Debug Notifications."""
+        """Record a unified action in both Home Assistant Logbook and Notifications."""
         ctx = self._fire_logbook_entry(
             entity_id=entity_id,
             message=action_desc,
             context=context,
         )
-        target_prefix = f"{entity_id} " if entity_id else ""
-        await self._async_notify(level, f"{NOTIFY_PREFIX} {target_prefix}{action_desc}")
+        await self._async_notify(level, entity_id, action_desc)
         return ctx
 
     async def _async_emit_problem_logbook_entries(
@@ -159,12 +228,13 @@ class CoordinatorNotificationMixin:
     ) -> None:
         """Record Logbook and notification entries when entities become unavailable or restored."""
         if newly_unavailable:
-            unavail_desc = ", ".join(
-                f"{self.friendly_entity_label(eid)} ({eid})" for eid in newly_unavailable
+            unavail_names = ", ".join(
+                self.friendly_entity_label(eid) for eid in newly_unavailable
             )
+            unavail_ids = ", ".join(newly_unavailable)
             await self.async_record_action(
                 entity_id=self.problem_binary_sensor_entity_id,
-                action_desc=f"rilevato problema -> indisponibile: {unavail_desc}",
+                action_desc=f"-> on, dispositivo indisponibile: {unavail_names} ({unavail_ids})",
                 context=eval_ctx,
                 level=NOTIFY_LEVEL_ERROR,
             )
@@ -180,12 +250,13 @@ class CoordinatorNotificationMixin:
                 )
 
         if newly_restored:
-            restored_desc = ", ".join(
-                f"{self.friendly_entity_label(eid)} ({eid})" for eid in newly_restored
+            restored_names = ", ".join(
+                self.friendly_entity_label(eid) for eid in newly_restored
             )
+            restored_ids = ", ".join(newly_restored)
             await self.async_record_action(
                 entity_id=self.problem_binary_sensor_entity_id,
-                action_desc=f"problema risolto -> ripristinato: {restored_desc}",
+                action_desc=f"-> off, problema risolto: {restored_names} ({restored_ids})",
                 context=eval_ctx,
                 level=NOTIFY_LEVEL_RECOVERY,
             )
@@ -196,4 +267,3 @@ class CoordinatorNotificationMixin:
                     message=f"entità ripristinata ({self.friendly_entity_label(eid)})",
                     context=st.context if st is not None else eval_ctx,
                 )
-
