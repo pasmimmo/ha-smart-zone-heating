@@ -1,0 +1,44 @@
+version: 2
+updates:
+  # Keep GitHub Actions pinned SHAs up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Rome"
+    commit-message:
+      prefix: "ci(deps)"
+    labels:
+      - "dependencies"
+      - "ci"
+
+  # Keep .dev-tools test runner Dockerfile base image up to date
+  - package-ecosystem: "docker"
+    directory: "/.dev-tools"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Rome"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+
+  # Keep Home Assistant container image in docker-compose.test.yml up to date
+  - package-ecosystem: "docker-compose"
+    directory: "/.dev-tools"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Rome"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
