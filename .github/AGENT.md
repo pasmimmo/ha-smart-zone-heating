@@ -1,9 +1,11 @@
 # Agent Directives: Git, Quality, Testing & Planning Standards
 
-## 1. Git Workflow & Branching
+## 1. Git Workflow, Pull Requests & Changelogs
 - NEVER push directly to the `main` branch.
 - All development, feature work, and routine commits MUST occur on `develop` (or feature branches derived from `develop`).
 - Changes can ONLY be promoted to `main` via a Pull Request (PR) targeted from `develop`, keeping `develop` and `main` aligned in structure.
+- **PR Approval & Merge Policy:** NEVER approve or merge a Pull Request yourself (`gh pr merge` is strictly forbidden unless the user has already merged it or explicitly instructs otherwise; by rule, ONLY the user approves and merges PRs). Always open the PR, verify CI checks, and stop so the user can review and merge it.
+- **Changelog & Release Notes Language:** `CHANGELOG.md` entries, PR descriptions/changelogs, and GitHub Release notes MUST ALWAYS be written in **English**.
 - **Development Tooling Organization & HACS Isolation:** Keep and track internal development tools, test suites, and sandbox configurations in `.dev-tools/`. Since HACS only downloads and installs `custom_components/smart_zone_heating/` onto user instances, `.dev-tools/` can safely live on both `develop` and `main`, while `custom_components/smart_zone_heating/` must contain strictly production integration files (never place test or dev files inside `custom_components/`).
 
 ## 2. Tag Management

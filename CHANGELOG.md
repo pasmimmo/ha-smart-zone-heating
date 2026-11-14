@@ -2,6 +2,13 @@
 
 All notable changes to **Smart Zone Heating** are documented in this file.
 
+## [1.1.1] - 2026-11-14
+
+### Fixed
+- **Immediate Persistence and In-Memory Application of `power_threshold_watt` in `OptionsFlow`**:
+  - Added step-by-step persistence (`_persist_step_options`) across all `SmartZoneHeatingOptionsFlow` wizard steps (`async_step_init`, `async_step_cooldown`, `async_step_power_sensor`, `async_step_manual_safety`) so updated settings (such as `power_threshold_watt`) are saved immediately to `entry.data` and `entry.options` even if the dialog is closed before the final step.
+  - Added `apply_options_in_place()` and `_load_advanced_settings()` on `SmartZoneHeatingCoordinator` to immediately apply new options in memory and re-evaluate manual ignition and cooldown thresholds, paired with `async_schedule_reload` on wizard completion.
+
 ## [1.1.0] - 2026-11-14
 
 ### Added
