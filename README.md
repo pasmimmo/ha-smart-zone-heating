@@ -4,6 +4,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.1-brightgreen.svg)](https://github.com/pasmimmo/ha-smart-zone-heating/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.11%2B-41BDF5.svg)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Quality gate status](https://sonarcloud.io/api/project_badges/measure?project=pasmimmo_ha-smart-zone-heating&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=pasmimmo_ha-smart-zone-heating)
 
 📖 **Documentazione Completa / Full Documentation:**
 * 🇮🇹 **[Manuale Completo in Italiano (`doc/IT.md`)](doc/IT.md)**
@@ -13,7 +14,7 @@
 
 ## 🇮🇹 Panoramica (Italiano)
 
-**Smart Zone Heating** è un'integrazione custom per **Home Assistant** progettata per orchestrare impianti di riscaldamento multi-zona ($1 \dots 10$ zone o piani indipendenti) pilotando le relative **elettrovalvole di zona** e un **Generatore di Calore comune** comandato da relè / contatto pulito (stufe a pellet idro, termocamini, caldaie a biomassa o tradizionali, pompe di calore).
+**Smart Zone Heating** è un'integrazione custom per **Home Assistant** progettata per orchestrare impianti di riscaldamento multi-zona ($1 \dots 10$ zone o piani indipendenti) pilotando le relative **elettrovalvole di zona** e un **Generatore di Calore comune** comandato da relè / contatto pulito (stufe a pellet idro, termocamini, caldaie a biomassa o tradizionali, pompe di calore) .
 
 ![Architettura del Sistema](docs/assets/architecture.svg)
 
