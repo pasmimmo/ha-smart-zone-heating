@@ -1,0 +1,35 @@
+name: GitHub Super-Linter
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  super-linter:
+    name: Super-Linter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Run GitHub Super-Linter
+        uses: super-linter/super-linter@2da136927bd4a73596db63044b504547c62cb854 # v9.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: main
+          VALIDATE_ALL_CODEBASE: "true"
+          VALIDATE_PYTHON_RUFF: "true"
+          VALIDATE_JSON: "true"
+          VALIDATE_GITHUB_ACTIONS: "true"
+          VALIDATE_GITLEAKS: "true"
+          PYTHON_RUFF_CONFIG_FILE: .ruff.toml
