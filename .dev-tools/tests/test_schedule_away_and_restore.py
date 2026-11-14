@@ -3,20 +3,36 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from conftest import (
+    HEATER_SWITCH,
+    TEMP_ZONE_1,
+    VALVE_ZONE_1,
+    VALVE_ZONE_2,
+    ZONE_1_ID,
+    ZONE_2_ID,
+    MockHardwareTracker,
+    build_default_entry_data,
+)
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.climate import (
     ATTR_HVAC_MODE,
     ATTR_PRESET_MODE,
     ATTR_TEMPERATURE,
-    DOMAIN as CLIMATE_DOMAIN,
-    HVACMode,
     SERVICE_SET_HVAC_MODE,
     SERVICE_SET_PRESET_MODE,
     SERVICE_SET_TEMPERATURE,
+    HVACMode,
+)
+from homeassistant.components.climate import (
+    DOMAIN as CLIMATE_DOMAIN,
 )
 from homeassistant.components.number import (
     ATTR_VALUE,
+)
+from homeassistant.components.number import (
     DOMAIN as NUMBER_DOMAIN,
+)
+from homeassistant.components.number import (
     SERVICE_SET_VALUE as NUMBER_SET_VALUE,
 )
 from homeassistant.const import ATTR_ENTITY_ID, STATE_OFF, STATE_ON
@@ -38,17 +54,6 @@ from custom_components.smart_zone_heating.const import (
     NOTIFY_LEVEL_WARNING,
     PRESET_AWAY,
     PRESET_NIGHT,
-)
-
-from conftest import (
-    HEATER_SWITCH,
-    TEMP_ZONE_1,
-    VALVE_ZONE_1,
-    VALVE_ZONE_2,
-    ZONE_1_ID,
-    ZONE_2_ID,
-    MockHardwareTracker,
-    build_default_entry_data,
 )
 
 

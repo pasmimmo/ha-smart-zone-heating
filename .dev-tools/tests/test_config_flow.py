@@ -1,6 +1,15 @@
 """Tests for Smart Zone Heating ConfigFlow and OptionsFlow."""
 from __future__ import annotations
 
+from conftest import (
+    HEATER_SWITCH,
+    POWER_SENSOR,
+    TEMP_ZONE_1,
+    VALVE_ZONE_1,
+    ZONE_1_ID,
+    MockHardwareTracker,
+    build_default_entry_data,
+)
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -32,16 +41,6 @@ from custom_components.smart_zone_heating.const import (
     DOMAIN,
 )
 from custom_components.smart_zone_heating.models import CONF_HYSTERESIS
-
-from conftest import (
-    HEATER_SWITCH,
-    POWER_SENSOR,
-    TEMP_ZONE_1,
-    VALVE_ZONE_1,
-    ZONE_1_ID,
-    MockHardwareTracker,
-    build_default_entry_data,
-)
 
 
 async def test_full_config_flow_wizard(

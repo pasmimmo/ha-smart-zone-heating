@@ -1,15 +1,15 @@
 """Generator Lifecycle Estimation (Watt & Timer fallback) and Manual Ignition Safety."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Callable
 
 from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from .const import (
-     GENERATOR_PHASE_LABELS,
+    GENERATOR_PHASE_LABELS,
     NOTIFY_LEVEL_DEBUG,
     NOTIFY_LEVEL_WARNING,
     GeneratorPhase,

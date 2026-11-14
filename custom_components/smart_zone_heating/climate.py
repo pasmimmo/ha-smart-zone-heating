@@ -1,7 +1,8 @@
 """Climate entities for Smart Zone Heating zones with Day / Night / Away presets."""
 from __future__ import annotations
 
-from typing import Any
+import contextlib
+from typing import Any, ClassVar
 
 from homeassistant.components.climate import (
     ATTR_PRESET_MODE,
@@ -40,8 +41,8 @@ class SmartZoneThermostat(SmartZoneEntity, ClimateEntity, RestoreEntity):
 
     _attr_translation_key = "zone_thermostat"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
-    _attr_preset_modes = [PRESET_DAY, PRESET_NIGHT, PRESET_AWAY]
+    _attr_hvac_modes: ClassVar[list[HVACMode]] = [HVACMode.HEAT, HVACMode.OFF]
+    _attr_preset_modes: ClassVar[list[str]] = [PRESET_DAY, PRESET_NIGHT, PRESET_AWAY]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.PRESET_MODE
@@ -88,10 +89,8 @@ class SmartZoneThermostat(SmartZoneEntity, ClimateEntity, RestoreEntity):
         """Safely parse and assign a float attribute on self.zone."""
         if raw_val is None:
             return
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             setattr(self.zone, attr_name, float(raw_val))
-        except (ValueError, TypeError):
-            pass
 
     @property
     def current_temperature(self) -> float | None:

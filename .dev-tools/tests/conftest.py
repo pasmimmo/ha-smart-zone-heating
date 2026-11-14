@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 from typing import Any
-import pytest
 
+import pytest
 from homeassistant.const import (
     ATTR_DEVICE_CLASS,
     ATTR_ENTITY_ID,
     ATTR_UNIT_OF_MEASUREMENT,
-     SERVICE_TURN_OFF,
+    SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
     STATE_OFF,
     STATE_ON,
