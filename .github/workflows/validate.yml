@@ -18,7 +18,7 @@ jobs:
     name: Code Quality (Ruff & Syntax)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
       - name: Run Ruff Linter & Compile Check
         run: |
           python3 -m py_compile custom_components/smart_zone_heating/*.py
@@ -28,7 +28,7 @@ jobs:
     name: HACS Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
       - name: HACS validation
         uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main
         with:
@@ -38,6 +38,6 @@ jobs:
     name: Hassfest Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
       - name: Hassfest validation
         uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361 # master
