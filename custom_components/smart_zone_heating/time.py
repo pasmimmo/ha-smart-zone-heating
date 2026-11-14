@@ -13,7 +13,7 @@ from .coordinator import SmartZoneHeatingCoordinator
 from .entity import SmartZoneBaseEntity
 
 
-async def async_setup_entry(
+async def async_setup_entry(  # NOSONAR
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,

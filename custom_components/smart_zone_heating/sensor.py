@@ -149,11 +149,12 @@ class HeaterDiagnosticSensor(_BaseDiagnosticSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         st = self.coordinator.hass.states.get(self.coordinator.heater_entity)
-        switch_state = (
-            "unavailable"
-            if st is None or st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
-            else ("on" if st.state == STATE_ON else "off")
-        )
+        if st is None or st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            switch_state = "unavailable"
+        elif st.state == STATE_ON:
+            switch_state = "on"
+        else:
+            switch_state = "off"
         return {
             "source_entity": self.coordinator.heater_entity,
             "switch_state": switch_state,
