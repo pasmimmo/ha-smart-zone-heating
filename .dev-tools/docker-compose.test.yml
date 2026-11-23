@@ -17,7 +17,7 @@ services:
 
   ha-sandbox:
     container_name: ha-smart-zone-test
-    image: ghcr.io/home-assistant/home-assistant:2026.11.1
+    image: ghcr.io/home-assistant/home-assistant:2026.11.2
     ports:
       # Uses 8123 by default for live browser testing; override with HA_SANDBOX_PORT=0 for dynamic port binding
       - "${HA_SANDBOX_PORT:-8123}:8123"
